@@ -8,6 +8,7 @@ O sistema foi concebido como uma aplicação moderna e desacoplada, focada em se
 * **Containerizada:** Isolamento completo do ambiente com Docker.
 * **Modular & Extensível:** Facilidade para adicionar novos tipos de busca ou parsers.
 
+
 ---
 
 ## 🏗 1. Stack Tecnológica
