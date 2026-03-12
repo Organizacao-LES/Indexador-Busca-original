@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 200 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 20% 12%;
+
+    --primary: 152 45% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 15% 94%;
+    --secondary-foreground: 152 45% 25%;
+
+    --muted: 150 10% 95%;
+    --muted-foreground: 200 10% 45%;
+
+    --accent: 150 20% 92%;
+    --accent-foreground: 152 45% 25%;
+
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 15% 90%;
+    --input: 200 15% 88%;
+    --ring: 152 45% 32%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 152 30% 14%;
+    --sidebar-foreground: 150 15% 85%;
+    --sidebar-primary: 152 45% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 152 25% 20%;
+    --sidebar-accent-foreground: 150 15% 92%;
+    --sidebar-border: 152 20% 22%;
+    --sidebar-ring: 152 45% 50%;
+    --sidebar-muted: 150 10% 55%;
+
+    --success: 152 55% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 70% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --chart-1: 152 45% 32%;
+    --chart-2: 152 35% 45%;
+    --chart-3: 0 65% 48%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 210 70% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card border border-border shadow-sm rounded-lg transition-shadow duration-200;
+  }
+
+  .stat-card {
+    @apply bg-card border border-border shadow-sm rounded-xl p-6 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150;
+  }
+
+  .sidebar-link-active {
+    @apply bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))];
+  }
+
+  .sidebar-link-inactive {
+    @apply text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-accent-foreground))] hover:bg-[hsl(var(--sidebar-accent))];
+  }
+
+  .highlight-term {
+    @apply bg-[hsl(var(--warning)/0.25)] text-[hsl(var(--foreground))] px-0.5 rounded font-medium;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
