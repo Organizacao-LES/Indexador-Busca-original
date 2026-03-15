@@ -1,0 +1,45 @@
+from src.pipeline.search_pipeline import SearchPipeline
+from src.stages.queryPreprocessStage import QueryPreprocessStage
+from src.stages.searchIndexStage import SearchIndexStage
+from src.stages.rankResultsStage import RankResultsStage
+from src.storage.index_repository import IndexRepository
+from src.stages.queryTokenizeStage import QueryTokenizeStage
+
+
+class SearchService:
+
+    """
+    Classe principal que inicializa o pipeline de busca.
+    Serviço principal responsável por executar buscas.
+    
+    """
+    def __init__(self):
+
+        # Repositório que contém o índice invertido
+        self.repository = IndexRepository()
+        
+        # Cria o pipeline de busca
+        self.pipeline = SearchPipeline()
+
+        # Adiciona as etapas ao pipeline
+        self.pipeline.add_stage(QueryPreprocessStage())
+        self.pipeline.add_stage(QueryTokenizeStage())
+        self.pipeline.add_stage(SearchIndexStage(self.repository))
+        self.pipeline.add_stage(RankResultsStage())
+
+    def search(self, query: str):
+
+        """
+        Executa uma busca no sistema.
+
+        :param query: consulta do usuário
+        :return: lista de documentos ordenados
+        """
+
+        # Executa o pipeline de busca
+        result = self.pipeline.run({
+            "query": query
+        })
+
+        # Retorna apenas os resultados
+        return result.get("results", [])
