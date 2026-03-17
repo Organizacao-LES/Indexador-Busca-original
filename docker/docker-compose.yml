@@ -1,0 +1,20 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: ifesdoc_postgres
+
+    environment:
+      POSTGRES_DB: ifesdoc
+      POSTGRES_USER: ifesdoc_user
+      POSTGRES_PASSWORD: ifesdoc_pass
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres_data:
