@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Edit, UserX, UserCheck, Plus, Shield, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,34 +7,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PageError, PageLoader } from "@/components/PageState";
+import { useUsers } from "@/hooks/use-app-query";
+import type { UserRole, UserSummary } from "@/types/app";
 
-const initialUsers = [
-  { id: 1, name: "Carlos Silva", login: "admin", email: "admin@ifes.edu.br", role: "Administrador" as const, active: true },
-  { id: 2, name: "João Oliveira", login: "joao.oliveira", email: "joao.oliveira@ifes.edu.br", role: "Usuário" as const, active: true },
-  { id: 3, name: "Ana Costa", login: "ana.costa", email: "ana.costa@ifes.edu.br", role: "Usuário" as const, active: false },
-  { id: 4, name: "Pedro Lima", login: "pedro.lima", email: "pedro.lima@ifes.edu.br", role: "Administrador" as const, active: true },
-  { id: 5, name: "Maria Santos", login: "maria.santos", email: "maria.santos@ifes.edu.br", role: "Usuário" as const, active: true },
-];
-
-type Role = "Administrador" | "Usuário";
-
-const roleIcons: Record<Role, React.ElementType> = {
+const roleIcons: Record<UserRole, React.ElementType> = {
   Administrador: ShieldCheck,
   Usuário: Shield,
 };
 
 const UsersPage = () => {
-  const [users, setUsers] = useState(initialUsers);
-  const [editingUser, setEditingUser] = useState<typeof initialUsers[0] | null>(null);
+  const { data, isLoading, isError, refetch } = useUsers();
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (data && users.length === 0) {
+      setUsers(data);
+    }
+  }, [data, users.length]);
+
+  if (isLoading) {
+    return <PageLoader label="Carregando usuários..." />;
+  }
+
+  if (isError) {
+    return <PageError title="Falha ao carregar usuários." onRetry={() => refetch()} />;
+  }
+
+  const effectiveUsers = users.length ? users : data || [];
+
   const toggleActive = (id: number) => {
-    const user = users.find((u) => u.id === id);
+    const user = effectiveUsers.find((u) => u.id === id);
     if (!user) return;
     const newStatus = !user.active;
-    setUsers(users.map((u) => (u.id === id ? { ...u, active: newStatus } : u)));
+    setUsers(effectiveUsers.map((u) => (u.id === id ? { ...u, active: newStatus } : u)));
     toast({
       title: newStatus ? "Usuário ativado" : "Usuário inativado",
       description: `${user.name} foi ${newStatus ? "ativado" : "inativado"} com sucesso. Ação registrada no histórico.`,
@@ -50,7 +60,7 @@ const UsersPage = () => {
     });
   };
 
-  const handleEdit = (user: typeof initialUsers[0]) => {
+  const handleEdit = (user: UserSummary) => {
     setEditingUser(user);
     setEditOpen(true);
   };
@@ -178,7 +188,7 @@ const UsersPage = () => {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => {
+            {effectiveUsers.map((user) => {
               const RoleIcon = roleIcons[user.role];
               return (
                 <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">

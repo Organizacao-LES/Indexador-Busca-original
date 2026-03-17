@@ -1,22 +1,49 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FileText, Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("admin@ifes.edu.br");
+  const [password, setPassword] = useState("admin123");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const redirectTo = (location.state as { from?: string } | null)?.from || "/busca";
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [isAuthenticated, navigate, redirectTo]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await login(email, password);
+      toast({
+        title: "Sessão iniciada",
+        description: "Frontend autenticado e pronto para consumir os módulos do sistema.",
+      });
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      toast({
+        title: "Falha no login",
+        description: error instanceof Error ? error.message : "Não foi possível autenticar.",
+        variant: "destructive",
+      });
+    } finally {
       setLoading(false);
-      navigate("/busca");
-    }, 1200);
+    }
   };
 
   return (
@@ -41,7 +68,8 @@ const LoginPage = () => {
                 id="email"
                 type="email"
                 placeholder="seu.email@ifes.edu.br"
-                defaultValue="admin@ifes.edu.br"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
             </div>
 
@@ -52,7 +80,8 @@ const LoginPage = () => {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
-                  defaultValue="admin123"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
                 <button
                   type="button"

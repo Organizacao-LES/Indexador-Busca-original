@@ -1,73 +1,52 @@
-# Welcome to your Lovable project
+# IFESDOC Frontend
 
-## Project info
+Frontend React do sistema IFESDOC. Esta interface foi reorganizada para funcionar como base definitiva da aplicação, com:
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+- autenticação local persistida
+- proteção de rotas
+- cliente de API centralizado
+- hooks com React Query
+- fallback mockado enquanto o backend REST ainda é consolidado
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Executar localmente
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+cd interface-web
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+O Vite sobe por padrão na porta `8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Variáveis de ambiente
 
-**Use GitHub Codespaces**
+Copie `interface-web/.env.example` para `interface-web/.env` e ajuste conforme o estágio do projeto:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```env
+VITE_APP_NAME=IFESDOC
+VITE_API_URL=http://localhost:8000
+VITE_USE_MOCK_API=true
+```
 
-## What technologies are used for this project?
+### Modo mock
 
-This project is built with:
+Com `VITE_USE_MOCK_API=true`, a interface funciona sem backend completo. Isso permite evoluir navegação, UX, formulários e integração de páginas agora.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Modo API real
 
-## How can I deploy this project?
+Quando as rotas forem implementadas no backend, altere para:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```env
+VITE_USE_MOCK_API=false
+```
 
-## Can I connect a custom domain to my Lovable project?
+e mantenha `VITE_API_URL` apontando para a API FastAPI.
 
-Yes, you can!
+## Estrutura relevante
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- `src/contexts/AuthContext.tsx`: sessão e autenticação.
+- `src/lib/api/client.ts`: cliente HTTP comum.
+- `src/lib/api/services.ts`: serviços por domínio.
+- `src/lib/api/mock-data.ts`: dados de fallback.
+- `src/hooks/use-app-query.ts`: hooks de consulta compartilhados.
+- `src/pages/`: telas ligadas à camada de dados.
