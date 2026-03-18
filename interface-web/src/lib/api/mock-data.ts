@@ -12,6 +12,13 @@ import type {
   SessionUser,
   UserSummary,
 } from "@/types/app";
+import sanitizeHtml from "sanitize-html";
+
+const stripHtml = (input: string): string =>
+  sanitizeHtml(input, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
 
 export const mockUsers: UserSummary[] = [
   { id: 1, name: "Carlos Silva", login: "admin", email: "admin@ifes.edu.br", role: "Administrador", active: true },
@@ -52,7 +59,7 @@ export const mockSearch = (query: string, page = 1, perPage = 20): SearchRespons
 
         return [
           result.title,
-          result.snippet.replace(/<[^>]+>/g, ""),
+          stripHtml(result.snippet),
           result.category,
         ].some((text) => text.toLowerCase().includes(normalized));
       });
