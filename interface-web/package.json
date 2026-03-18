@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reportsDirectory=../reports/coverage/frontend",
     "test:watch": "vitest"
   },
   "dependencies": {

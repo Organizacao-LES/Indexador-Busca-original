@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - "feature/**"
+      - "fix/**"
+      - "hotfix/**"
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Test, Build and Analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+
+    env:
+      PYTHON_VERSION: "3.11"
+      NODE_VERSION: "20"
+      VITE_APP_NAME: IFESDOC
+      VITE_API_URL: http://localhost:8000
+      VITE_USE_MOCK_API: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: interface-web/package-lock.json
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: interface-web
+        run: npm ci
+
+      - name: Install Vitest coverage provider
+        working-directory: interface-web
+        run: npm install --no-save -D @vitest/coverage-v8
+
+      - name: Run backend tests with coverage
+        run: |
+          mkdir -p reports/coverage
+          pytest \
+            backend/tests \
+            backend/pipeline_indexador/src/tests \
+            --cov=backend/app \
+            --cov=backend/pipeline_busca/src \
+            --cov=backend/pipeline_indexador/src \
+            --cov-report=xml:reports/coverage/backend-coverage.xml
+
+      - name: Run frontend lint
+        working-directory: interface-web
+        run: npm run lint
+
+      - name: Run frontend tests with coverage
+        working-directory: interface-web
+        run: npm run test:coverage
+
+      - name: Run frontend build
+        working-directory: interface-web
+        run: npm run build
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: reports/coverage
+          if-no-files-found: warn
+
+      - name: SonarQube scan
+        if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
+        uses: SonarSource/sonarqube-scan-action@v7.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: SonarQube quality gate
+        if: ${{ secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
+        id: sonarqube-quality-gate-check
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        timeout-minutes: 10
+        with:
+          pollingTimeoutSec: 600
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Summarize SonarQube status
+        if: ${{ always() && secrets.SONAR_TOKEN != '' && secrets.SONAR_HOST_URL != '' }}
+        run: echo "Quality Gate status: ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize SonarQube skip
+        if: ${{ secrets.SONAR_TOKEN == '' || secrets.SONAR_HOST_URL == '' }}
+        run: echo "SonarQube scan skipped because SONAR_TOKEN and/or SONAR_HOST_URL are not configured in repository secrets." >> "$GITHUB_STEP_SUMMARY"

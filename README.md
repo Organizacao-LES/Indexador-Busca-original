@@ -167,6 +167,7 @@ Os principais documentos do projeto estao em `docs/`:
 - `docs/modelo_dados.md`
 - `docs/api_spec.md`
 - `docs/historias_usuario.md`
+- `docs/sonarqube.md`
 
 ## Status do Projeto
 
