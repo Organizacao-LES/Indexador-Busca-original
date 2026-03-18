@@ -2,575 +2,543 @@
 
 ## Visão geral
 
-O backend do IFESDOC foi estruturado para suportar duas dimensões complementares:
+O backend do IFESDOC agora possui uma arquitetura híbrida entre:
 
-- uma API REST principal em `backend/app`, desenhada com FastAPI e organização em camadas;
-- pipelines especializados de indexação e busca em `backend/pipeline_indexador` e `backend/pipeline_busca`.
+- um núcleo principal em `backend/app`, já com API FastAPI, autenticação JWT, integração com PostgreSQL via SQLAlchemy e bootstrap de infraestrutura;
+- dois módulos de pipeline em `backend/pipeline_indexador` e `backend/pipeline_busca`, mantidos como implementações separadas de indexação e busca em memória.
 
-Hoje, a estrutura arquitetural está mais avançada do que a implementação efetiva da API. Em termos práticos:
+Em relação ao estado anterior, houve uma evolução concreta do backend principal:
 
-- a pasta `backend/app` define a arquitetura alvo do sistema, mas quase todos os módulos ainda estão vazios;
-- as implementações concretas existentes estão concentradas nos pipelines experimentais de indexação e busca;
-- `backend/app/main.py` expõe apenas um endpoint raiz simples.
+- autenticação real foi implementada;
+- o domínio `User` já está mapeado com SQLAlchemy;
+- a API `v1` já possui rotas de autenticação;
+- dependências de segurança e sessão foram adicionadas;
+- o schema relacional do sistema foi formalizado em SQL.
 
-Este documento descreve a arquitetura real do repositório e separa explicitamente:
+Ao mesmo tempo, o backend ainda está em transição:
 
-- o que já está implementado;
-- o que já está modelado estruturalmente, mas ainda sem código.
+- a parte de autenticação já está integrada;
+- os demais domínios continuam parcialmente apenas modelados na estrutura do banco ou previstos pela arquitetura do frontend;
+- os pipelines de busca/indexação ainda estão desacoplados da API principal.
 
 ## Visão arquitetural macro
 
 ```text
 Frontend (interface-web)
-  -> chama API REST esperada em /api/v1/*
+  -> /api/v1/auth/login
+  -> futuramente /api/v1/search, /documents, /users, /metrics, ...
 
 backend/app
   -> FastAPI
-  -> camadas: api, services, repositories, domain, schemas, core, strategies, adapters, pipeline
+  -> core (config, database, dependencies, security)
+  -> api/v1 (auth)
+  -> services (auth)
+  -> repositories (user)
+  -> domain (user)
+  -> schemas (auth)
+
+docker/postgres/init
+  -> schema SQL relacional do sistema
+  -> seed do usuário administrador
 
 backend/pipeline_indexador
-  -> pipeline independente de indexação textual
-  -> pré-processa, tokeniza e constrói índice invertido em memória
+  -> indexação em memória
 
 backend/pipeline_busca
-  -> pipeline independente de busca
-  -> normaliza consulta, tokeniza, consulta índice e ranqueia resultados
+  -> busca em memória
 ```
 
-## Organização da pasta `backend/`
+## Estrutura da pasta `backend/`
 
-- `backend/app/`: núcleo arquitetural da API principal.
-- `backend/pipeline_indexador/`: implementação funcional do pipeline de indexação.
-- `backend/pipeline_busca/`: implementação funcional do pipeline de busca.
+- `backend/app/`: backend principal da aplicação.
+- `backend/pipeline_indexador/`: prova de conceito do pipeline de indexação.
+- `backend/pipeline_busca/`: prova de conceito do pipeline de busca.
 - `backend/tests/`: testes do backend principal.
-- `backend/Dockerfile`: reservado para containerização do backend, mas atualmente vazio.
+- `backend/Dockerfile`: container da API FastAPI.
 
-## 1. Núcleo da API principal: `backend/app/`
+## 1. Backend principal: `backend/app/`
 
-Essa pasta representa a arquitetura-alvo do backend. Ela foi desenhada para seguir uma separação inspirada em Clean Architecture, Service Layer, Repository Pattern e Strategy Pattern.
+Essa pasta representa a aplicação principal que o frontend deve consumir. A arquitetura vigente segue uma combinação de:
 
-### Estrutura e função de cada diretório/pacote
+- arquitetura em camadas;
+- Service Layer;
+- Repository Pattern;
+- autenticação baseada em JWT;
+- ORM com SQLAlchemy.
 
-#### `backend/app/main.py`
+## Estrutura e função de cada diretório/pacote
 
-É o ponto de entrada atual da API principal.
+### `backend/app/main.py`
 
-Responsabilidades atuais:
+É o ponto de entrada efetivo da API.
 
-- instancia o `FastAPI`;
-- define metadados básicos da aplicação;
-- expõe `GET /` com mensagem de status.
+Responsabilidades:
+
+- cria a aplicação FastAPI;
+- define `lifespan` para tentativa de criação das tabelas do ORM;
+- registra `CORSMiddleware`;
+- inclui `api_router` em `/api/v1`;
+- padroniza respostas de erro para:
+  - exceções HTTP;
+  - validação de request;
+  - indisponibilidade do banco;
+  - schema de banco não inicializado;
+- expõe `GET /`.
+
+Função arquitetural:
+
+- bootstrap da aplicação web;
+- composição final das camadas internas;
+- adaptação do backend às condições de infraestrutura.
+
+Observação:
+
+- `main.py` já não é mais apenas um stub;
+- ele agora conecta configuração, banco, domínio e roteamento.
+
+### `backend/app/api/`
+
+Camada HTTP do sistema.
+
+#### `backend/app/api/v1/`
+
+Pacote de versionamento da API.
+
+##### `router.py`
+
+- agregador das rotas versionadas;
+- atualmente inclui `auth_router`.
+
+##### `auth_routes.py`
+
+- módulo HTTP de autenticação;
+- expõe:
+  - `POST /api/v1/auth/login`
+  - `GET /api/v1/auth/me`
+
+Responsabilidades:
+
+- receber `LoginRequest`;
+- usar `AuthService` com `Session`;
+- resolver dependência de usuário autenticado via `get_current_user`;
+- serializar respostas por `TokenResponse` e `AuthenticatedUserResponse`.
+
+##### `__init__.py`
+
+- marcador de pacote.
+
+Estado arquitetural atual:
+
+- a API `v1` já existe funcionalmente, mas ainda focada em autenticação;
+- rotas de busca, documentos, ingestão, métricas e histórico ainda não foram movidas para esta camada.
+
+### `backend/app/core/`
+
+Infraestrutura transversal do backend principal.
+
+#### `config.py`
+
+- carrega variáveis de ambiente a partir da raiz do projeto;
+- usa `BaseSettings` de `pydantic-settings`;
+- define:
+  - `DATABASE_URL`
+  - `SECRET_KEY`
+  - `ALGORITHM`
+  - `ACCESS_TOKEN_EXPIRE_MINUTES`
+  - `BACKEND_CORS_ORIGINS`
+
+Função arquitetural:
+
+- centralizar configuração e ambiente;
+- evitar parâmetros espalhados em múltiplos módulos.
+
+#### `database.py`
+
+- cria `engine` SQLAlchemy com `DATABASE_URL`;
+- cria `SessionLocal`;
+- define `Base = declarative_base()`;
+- expõe `get_db()` para injeção de sessão.
+
+Função arquitetural:
+
+- padronizar acesso ao banco;
+- sustentar ORM e dependências do FastAPI.
+
+#### `security.py`
+
+- encapsula hashing de senha com `passlib/bcrypt`;
+- verifica senha;
+- cria JWT com `python-jose`;
+- decodifica e valida token.
+
+Função arquitetural:
+
+- isolar mecanismos de segurança;
+- evitar lógica de token e hash dentro das rotas.
+
+#### `dependencies.py`
+
+- define a dependência `get_current_user`;
+- lê o Bearer token com `HTTPBearer`;
+- decodifica o JWT;
+- resolve `sub` para `user_id`;
+- consulta o usuário no banco;
+- valida existência e status ativo.
+
+Função arquitetural:
+
+- concentrar autenticação/autorização básica reutilizável pela API.
+
+#### `__init__.py`
+
+- marcador de pacote.
+
+### `backend/app/domain/`
+
+Pacote do modelo de domínio persistido.
+
+#### `user.py`
+
+Modelo SQLAlchemy da tabela `usuario`.
+
+Campos atualmente mapeados:
+
+- `cod_usuario`
+- `nome`
+- `login`
+- `email`
+- `senha_hash`
+- `perfil`
+- `ativo`
+
+Função arquitetural:
+
+- representar o usuário no backend principal;
+- servir de base para repositórios, serviços e dependências de autenticação.
+
+#### `__init__.py`
+
+- marcador de pacote.
 
 Estado atual:
 
-- implementado, porém minimalista;
-- ainda não integra `router.py`, middlewares, dependências, autenticação ou banco.
+- o domínio já começou a ser implementado, mas ainda só para usuários;
+- os demais agregados do sistema continuam apenas no schema SQL ou previstos pela arquitetura.
 
-#### `backend/app/api/`
+### `backend/app/repositories/`
 
-Camada HTTP da aplicação. Deve receber requisições, validar entradas e delegar para serviços.
+Camada de acesso a dados do backend principal.
 
-##### `backend/app/api/v1/`
+#### `user_repository.py`
 
-- pacote de versionamento da API REST.
-- deveria concentrar os routers por domínio.
+- encapsula consultas de usuário com SQLAlchemy;
+- expõe:
+  - `get_by_login`
+  - `get_by_email`
+  - `get_by_login_or_email`
+  - `get_by_id`
 
-Arquivos:
+Função arquitetural:
 
-- `router.py`: agregador principal de rotas versionadas. Está vazio.
-- `search_routes.py`: previsto para endpoints de busca. Está vazio.
-- `document_routes.py`: previsto para endpoints de documentos. Está vazio.
-- `user_routes.py`: previsto para endpoints de usuários. Está vazio.
-- `health_routes.py`: previsto para health checks e readiness. Está vazio.
-- `__init__.py`: marcador de pacote.
+- manter queries de usuário fora de `AuthService`;
+- reduzir acoplamento entre serviço e ORM.
 
-Função arquitetural do pacote:
+#### `postgresql_driver.py`
 
-- isolar a camada web;
-- manter a lógica HTTP separada da regra de negócio;
-- padronizar contratos da API versão `v1`.
-
-#### `backend/app/core/`
-
-Pacote reservado para infraestrutura transversal.
-
-Arquivos:
-
-- `config.py`: destinado a configurações e leitura de ambiente. Está vazio.
-- `database.py`: destinado à conexão SQLAlchemy, sessão e engine. Está vazio.
-- `logging.py`: destinado a logging estruturado. Está vazio.
-- `security.py`: destinado a autenticação, hash e tokens. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- bootstrap técnico da aplicação;
-- recursos compartilhados de configuração, banco, segurança e observabilidade.
-
-#### `backend/app/domain/`
-
-Pacote do domínio puro do sistema.
-
-Arquivos:
-
-- `document.py`: entidade de documento. Está vazio.
-- `user.py`: entidade de usuário. Está vazio.
-- `term.py`: entidade de termo/indexação. Está vazio.
-- `index.py`: entidade relacionada ao índice. Está vazio.
-- `search.py`: objetos de busca. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- representar as entidades centrais do negócio;
-- abrigar regras puras, sem dependência de framework.
-
-#### `backend/app/schemas/`
-
-Pacote de contratos de entrada e saída, provavelmente orientado a Pydantic.
-
-Arquivos:
-
-- `document_schema.py`: contratos de documentos. Está vazio.
-- `user_schema.py`: contratos de usuários. Está vazio.
-- `search_schema.py`: contratos de busca. Está vazio.
-- `feedback_schema.py`: contratos auxiliares de resposta/feedback. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- validar payloads HTTP;
-- serializar respostas;
-- separar modelos externos dos modelos internos de domínio.
-
-#### `backend/app/services/`
-
-Camada de casos de uso e orquestração.
-
-Arquivos:
-
-- `search_service.py`: serviço de busca da API principal. Está vazio.
-- `ingestion_service.py`: serviço de ingestão. Está vazio.
-- `document_service.py`: serviço de documentos. Está vazio.
-- `user_service.py`: serviço de usuários. Está vazio.
-- `index_service.py`: serviço de indexação e status. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- coordenar regras de negócio;
-- chamar repositórios, estratégias e adapters;
-- manter controladores HTTP finos.
-
-#### `backend/app/repositories/`
-
-Camada de persistência abstrata.
-
-Arquivos:
-
-- `document_repository.py`: acesso a documentos. Está vazio.
-- `user_repository.py`: acesso a usuários. Está vazio.
-- `term_repository.py`: acesso a termos. Está vazio.
-- `index_repository.py`: acesso ao índice. Está vazio.
-- `search_repository.py`: consultas especializadas de busca. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- encapsular SQL e persistência;
-- evitar dependência direta do banco nas camadas superiores.
-
-#### `backend/app/strategies/`
-
-Pacote de algoritmos intercambiáveis.
-
-Arquivos:
-
-- `ranking_strategy.py`: interface base de ranking. Está vazio.
-- `bm25_strategy.py`: estratégia BM25. Está vazio.
-- `tfidf_strategy.py`: estratégia TF-IDF. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- permitir troca de estratégia de relevância sem alterar serviços;
-- sustentar evolução do motor de busca.
-
-#### `backend/app/adapters/`
-
-Pacote de integração com fontes externas e formatos de documento.
-
-Arquivos:
-
-- `pdf_parser.py`: parser de PDF. Está vazio.
-- `file_storage.py`: abstração de armazenamento de arquivos. Está vazio.
-- `tokenizer.py`: adaptação de tokenização. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- desacoplar parsing, storage e ferramentas externas da lógica de negócio.
-
-#### `backend/app/pipeline/`
-
-Pacote reservado para pipelines integrados à API principal.
-
-Arquivos:
-
-- `ingestion_pipeline.py`: pipeline de ingestão. Está vazio.
-- `indexing_pipeline.py`: pipeline de indexação. Está vazio.
-- `search_pipeline.py`: pipeline de busca. Está vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- orquestrar fluxos multiestágio dentro da aplicação principal.
-
-#### `backend/app/exceptions/`
-
-- pacote para exceções customizadas;
-- atualmente contém apenas `__init__.py` vazio.
-
-#### `backend/app/utils/`
-
-Pacote de utilidades técnicas.
-
-Arquivos:
-
-- `pagination.py`: utilitário esperado para paginação. Está vazio.
-- `text_processing.py`: utilitário esperado para normalização textual. Está vazio.
-- `time_utils.py`: arquivo praticamente vazio.
-- `__init__.py`: marcador de pacote.
-
-Função arquitetural esperada:
-
-- concentrar helpers reutilizáveis que não pertencem ao domínio puro.
-
-### Diagnóstico do estado de `backend/app`
-
-Arquiteturalmente, `backend/app` está bem desenhado como destino final do sistema. Porém, em implementação:
-
-- apenas `main.py` possui código funcional;
-- quase todos os pacotes existem como esqueleto;
-- a API REST consumida pelo frontend ainda não foi conectada de fato.
-
-## 2. Pipeline funcional de indexação: `backend/pipeline_indexador/`
-
-Esse é o módulo backend mais implementado no repositório. Ele modela o fluxo de indexação textual como pipeline sequencial em memória.
-
-## Função da pasta
-
-- demonstrar o processo de indexação de um documento;
-- servir como prova de conceito para o motor de indexação;
-- aplicar o padrão Pipeline/Chain of Responsibility.
-
-## Estrutura e função de cada diretório
-
-### `backend/pipeline_indexador/app.py`
-
-Script de execução manual do indexador.
-
-Responsabilidades:
-
-- instancia `IndexerService`;
-- envia um documento de exemplo para indexação;
-- imprime confirmação no terminal.
-
-### `backend/pipeline_indexador/src/`
-
-Código-fonte do pipeline de indexação.
-
-#### `backend/pipeline_indexador/src/indexer/`
-
-##### `indexer_service.py`
-
-Serviço principal do módulo de indexação.
-
-Responsabilidades:
-
-- instanciar `IndexRepository`;
-- montar `IndexPipeline`;
-- registrar as etapas `PreprocessStage`, `TokenizeStage` e `IndexBuildStage`;
-- expor `index_document(document_id, text)`.
-
-É a fachada principal do pipeline.
-
-#### `backend/pipeline_indexador/src/pipeline/`
-
-Infraestrutura genérica do pipeline.
-
-##### `pipeline_stage.py`
-
-- classe base abstrata das etapas;
-- define o contrato `execute(context: dict) -> dict`.
-
-##### `index_pipeline.py`
-
-- pipeline sequencial;
-- mantém lista ordenada de etapas;
-- executa cada estágio sobre um `context` compartilhado.
-
-Função arquitetural do pacote:
-
-- padronizar execução em etapas;
-- facilitar extensão por novos estágios.
-
-#### `backend/pipeline_indexador/src/stages/`
-
-Etapas concretas do pipeline.
-
-##### `preprocess_stage.py`
-
-- normaliza texto de entrada;
-- converte para minúsculas;
-- remove pontuação com regex;
-- grava `processed_text` no contexto.
-
-##### `tokenize_stage.py`
-
-- divide o texto normalizado por espaços;
-- grava `tokens` no contexto.
-
-##### `index_build_stage.py`
-
-- lê `document_id` e `tokens`;
-- envia os tokens ao repositório;
-- atualiza o índice invertido em memória.
-
-Função arquitetural do pacote:
-
-- separar cada transformação em unidades independentes e composáveis.
-
-#### `backend/pipeline_indexador/src/storage/`
-
-##### `index_repository.py`
-
-Repositório em memória do índice invertido.
-
-Responsabilidades:
-
-- manter `self.index` como dicionário;
-- criar entradas por token;
-- associar cada token a uma lista de documentos;
-- oferecer `search(term)` para recuperação simples.
-
-Observação importante:
-
-- a persistência atual é totalmente volátil;
-- não há banco, arquivo ou sincronização com `backend/app/repositories`.
-
-#### `backend/pipeline_indexador/src/tests/`
-
-- reservado para testes do pipeline;
-- `pipeline_test.py` existe, mas está vazio.
-
-## Fluxo interno do indexador
-
-```text
-IndexerService.index_document()
-  -> IndexPipeline.run()
-    -> PreprocessStage.execute()
-    -> TokenizeStage.execute()
-    -> IndexBuildStage.execute()
-      -> IndexRepository.add_tokens()
-```
-
-## 3. Pipeline funcional de busca: `backend/pipeline_busca/`
-
-Esse módulo implementa a busca textual como pipeline independente, também em memória.
-
-## Função da pasta
-
-- demonstrar como uma consulta é processada;
-- aplicar tokenização e normalização à query;
-- recuperar documentos do índice;
-- ranquear resultados por frequência.
-
-## Estrutura e função de cada diretório
-
-### `backend/pipeline_busca/src/search_app.py`
-
-Script manual de demonstração do fluxo de busca.
-
-Responsabilidades:
-
-- instancia `SearchService`;
-- executa uma consulta fixa;
-- imprime o resultado no terminal.
-
-### `backend/pipeline_busca/src/search/`
-
-##### `search_service.py`
-
-Serviço principal do módulo de busca.
-
-Responsabilidades:
-
-- instanciar `IndexRepository`;
-- montar `SearchPipeline`;
-- registrar as etapas `QueryPreprocessStage`, `QueryTokenizeStage`, `SearchIndexStage` e `RankResultsStage`;
-- expor `search(query)`.
-
-Observação arquitetural:
-
-- esse serviço cria seu próprio repositório em memória;
-- ele não compartilha estado com `pipeline_indexador`, a menos que isso seja integrado manualmente no futuro.
-
-### `backend/pipeline_busca/src/pipeline/`
-
-Infraestrutura genérica do pipeline de busca.
-
-##### `pipeline_stage.py`
-
-- classe base de estágios do pipeline;
-- impõe a implementação de `execute`.
-
-##### `search_pipeline.py`
-
-- controla a ordem das etapas de busca;
-- executa a transformação progressiva do contexto até gerar resultados.
-
-### `backend/pipeline_busca/src/stages/`
-
-Etapas do pipeline de consulta.
-
-##### `queryPreprocessStage.py`
-
-- normaliza a consulta;
-- remove pontuação e converte para minúsculas;
-- grava `processed_query`.
-
-##### `queryTokenizeStage.py`
-
-- divide `processed_query` em palavras;
-- grava `tokens`.
-
-##### `searchIndexStage.py`
-
-- recebe tokens;
-- consulta o índice invertido via repositório;
-- grava `documents` encontrados.
-
-##### `rankResultsStage.py`
-
-- usa `collections.Counter`;
-- conta frequência de ocorrência dos documentos;
-- ordena por maior frequência;
-- grava `results`.
-
-### `backend/pipeline_busca/src/storage/`
-
-##### `index_repository.py`
-
-Repositório em memória do índice invertido para o módulo de busca.
-
-Responsabilidades:
-
-- manter estrutura `termo -> [documentos]`;
-- permitir `add_tokens(document_id, tokens)`;
-- permitir `search(term)`;
-- permitir `search_tokens(tokens)` para buscas multi-termo.
-
-Observação importante:
-
-- esse repositório duplica a ideia do repositório do indexador;
-- ainda não existe uma infraestrutura única compartilhada entre indexação e busca;
-- por isso, a arquitetura atual é demonstrativa, não um backend consolidado fim a fim.
-
-## Fluxo interno da busca
-
-```text
-SearchService.search()
-  -> SearchPipeline.run()
-    -> QueryPreprocessStage.execute()
-    -> QueryTokenizeStage.execute()
-    -> SearchIndexStage.execute()
-      -> IndexRepository.search_tokens()
-    -> RankResultsStage.execute()
-```
-
-## 4. Testes do backend principal
-
-### `backend/tests/`
-
-- `test_main.py`: testa a função `root()` de `backend/app/main.py`.
-- `__init__.py`: marcador de pacote.
-
-Estado atual:
-
-- há apenas um teste básico de sanidade;
-- cobertura ainda não alcança serviços, pipelines, repositórios ou API REST versionada.
-
-## 5. Relação com a infraestrutura do projeto
-
-Embora esteja fora de `backend/`, alguns arquivos da raiz impactam a arquitetura backend.
-
-### `requirements.txt`
-
-Define as dependências pretendidas do backend:
-
-- `fastapi`, `uvicorn`, `python-multipart`, `python-dotenv`;
-- `sqlalchemy`, `psycopg2-binary`, `alembic`;
-- `pydantic`;
-- `python-jose`, `passlib`, `bcrypt`;
-- `pdfplumber`, `unidecode`;
-- `pytest`, `pytest-cov`.
+- driver alternativo de acesso ao PostgreSQL via `psycopg2`;
+- fornece `conectar()` e `executar()`.
 
 Leitura arquitetural:
 
-- o backend foi planejado para autenticação por token, persistência relacional, parsing de PDF e testes;
-- porém boa parte disso ainda não aparece no código implementado.
+- este arquivo representa uma camada de acesso de baixo nível paralela ao SQLAlchemy;
+- hoje ele não está integrado ao fluxo principal da API;
+- funciona mais como utilitário/manual ou resquício de uma abordagem anterior.
 
-### `docker/docker-compose.yml`
+#### `__init__.py`
 
-Hoje a infraestrutura containerizada disponível está focada em apoio ao backend:
+- marcador de pacote.
 
-- `postgres`: banco principal do projeto (`ifesdoc`);
-- `sonarqube_db`: banco do SonarQube;
-- `sonarqube`: análise de qualidade.
+### `backend/app/services/`
 
-Papel na arquitetura:
+Camada de caso de uso do backend principal.
 
-- fornecer PostgreSQL para a futura camada de persistência do backend;
-- suportar análise estática e governança de qualidade.
+#### `auth_service.py`
 
-## Padrões arquiteturais presentes
+- implementa o fluxo de autenticação;
+- consulta usuário via `UserRepository`;
+- valida senha com `verify_password`;
+- recusa usuários inexistentes ou inativos;
+- cria JWT com `create_access_token`;
+- converte `perfil` técnico para papel funcional com `_map_role`.
 
-Mesmo com implementação parcial, o repositório já deixa claros os padrões desejados:
+Retorno atual do login:
 
-- `Service Layer`: `app/services/`.
-- `Repository Pattern`: `app/repositories/` e repositórios dos pipelines.
-- `Strategy Pattern`: `app/strategies/`.
-- `Adapter Pattern`: `app/adapters/`.
-- `Pipeline / Chain of Responsibility`: `pipeline_indexador` e `pipeline_busca`.
-- `Layered Architecture`: separação entre API, domínio, serviços, persistência e infraestrutura.
+- id
+- nome
+- login
+- email
+- role
+- active
+- token
+- access_token
+- token_type
 
-## Diagnóstico final da arquitetura backend
+Função arquitetural:
 
-### O que já está implementado
+- encapsular a regra de autenticação;
+- manter `auth_routes.py` fina.
 
-- API FastAPI mínima com endpoint raiz.
-- pipeline funcional de indexação em memória.
-- pipeline funcional de busca em memória.
-- teste simples de sanidade.
-- infraestrutura Docker com PostgreSQL e SonarQube.
+#### `__init__.py`
 
-### O que já está modelado, mas ainda vazio
+- marcador de pacote.
 
-- camada HTTP versionada em `app/api/v1`;
-- domínio em `app/domain`;
-- contratos Pydantic em `app/schemas`;
-- serviços de negócio em `app/services`;
-- persistência em `app/repositories`;
-- estratégias de ranking em `app/strategies`;
-- infraestrutura transversal em `app/core`;
-- adapters de parsing e storage em `app/adapters`.
+Estado atual:
 
-### Consequência arquitetural prática
+- `auth_service.py` é a primeira service layer consolidada do backend principal.
 
-O backend completo do repositório ainda está em fase de consolidação. A arquitetura alvo está bem definida, mas a execução real hoje está fragmentada entre:
+### `backend/app/schemas/`
 
-- uma API principal ainda esquelética;
-- pipelines independentes usados como prova de conceito.
+Camada de contratos externos da API.
 
-Para o sistema funcionar ponta a ponta com o frontend atual, o próximo passo natural seria integrar os pipelines funcionais à camada `backend/app`, preenchendo `services`, `repositories`, `schemas`, `api/v1` e `core`.
+#### `auth_schema.py`
+
+Define os modelos Pydantic de autenticação:
+
+- `LoginRequest`
+- `TokenResponse`
+- `AuthenticatedUserResponse`
+
+Funções:
+
+- validar request de login;
+- impor a presença de `login` ou `email` com `model_validator`;
+- padronizar serialização da resposta.
+
+#### `__init__.py`
+
+- marcador de pacote.
+
+Estado atual:
+
+- os schemas reais já começaram pela autenticação;
+- os contratos dos demais domínios ainda não existem no backend principal.
+
+### `backend/app/utils/`
+
+Pacote auxiliar.
+
+Arquivos:
+
+- `pagination.py`: vazio.
+- `text_processing.py`: vazio.
+- `time_utils.py`: residual/minimal.
+- `__init__.py`: marcador de pacote.
+
+Leitura arquitetural:
+
+- o pacote existe como ponto de expansão, mas ainda não participa do fluxo principal.
+
+### `backend/app/strategies/`
+
+- pacote reservado para estratégias de ranking e busca;
+- hoje contém apenas `__init__.py`.
+
+### `backend/app/pipeline/`
+
+- pacote reservado para pipelines integrados ao backend principal;
+- hoje contém apenas `__init__.py`.
+
+### `backend/app/adapters/`
+
+- pacote reservado para integrações de parsing e armazenamento;
+- hoje contém apenas `__init__.py`.
+
+### `backend/app/exceptions/`
+
+- pacote reservado para exceções específicas do domínio/aplicação;
+- hoje contém apenas `__init__.py`.
+
+## 2. Modelagem relacional e bootstrap do banco
+
+Embora esteja fora de `backend/app`, a pasta `docker/postgres/init/` agora é parte central da arquitetura backend porque define o modelo relacional real do sistema.
+
+### `docker/postgres/init/01_schema.sql`
+
+Script de criação do schema principal do IFESDOC.
+
+Tabelas modeladas:
+
+- `usuario`
+- `categoria_documento`
+- `status_ingestao`
+- `tipo_campo`
+- `calculo_metricas`
+- `documento`
+- `documentos_invalidos`
+- `historico_busca`
+- `historico_administrativo`
+- `historico_documento`
+- `historico_ingestao`
+- `termo`
+- `campo_documento`
+- `historico_indexacao`
+- `indice_invertido`
+- `feedback_relevancia`
+
+Papel arquitetural:
+
+- formaliza o domínio de usuários, documentos, ingestão, histórico, indexação, métricas e relevância;
+- mostra a arquitetura de persistência alvo do sistema;
+- revela que o backend foi modelado para ir além da autenticação, mesmo que o código Python ainda não tenha todas essas entidades implementadas.
+
+### `docker/postgres/init/02_admin.sql`
+
+- insere um usuário administrador padrão;
+- usa `ON CONFLICT (login) DO NOTHING`.
+
+Papel arquitetural:
+
+- disponibiliza bootstrap mínimo do sistema autenticável;
+- permite que a API de login funcione sem cadastro manual inicial.
+
+## 3. Infraestrutura de execução do backend principal
+
+### `backend/Dockerfile`
+
+Container de execução da API.
+
+Responsabilidades:
+
+- usa `python:3.10-slim`;
+- instala dependências de compilação e `libpq-dev`;
+- instala `requirements.txt`;
+- copia `backend/` para `/app`;
+- expõe porta `8000`;
+- sobe `uvicorn app.main:app`.
+
+Função arquitetural:
+
+- empacotar a API principal em ambiente reprodutível;
+- padronizar execução local/containerizada.
+
+## 4. Pipelines independentes
+
+Os módulos abaixo continuam existindo e fazem parte da arquitetura do repositório, mas não estão integrados ao backend principal autenticado.
+
+### `backend/pipeline_indexador/`
+
+Pipeline de indexação em memória.
+
+Função:
+
+- pré-processar texto;
+- tokenizar;
+- construir índice invertido em memória.
+
+Estrutura:
+
+- `app.py`: execução manual;
+- `src/indexer/indexer_service.py`: fachada do indexador;
+- `src/pipeline/`: infraestrutura do pipeline;
+- `src/stages/`: etapas `PreprocessStage`, `TokenizeStage`, `IndexBuildStage`;
+- `src/storage/index_repository.py`: repositório do índice invertido em memória;
+- `src/tests/pipeline_test.py`: reservado, ainda vazio.
+
+### `backend/pipeline_busca/`
+
+Pipeline de busca em memória.
+
+Função:
+
+- normalizar query;
+- tokenizar consulta;
+- consultar índice invertido;
+- ranquear resultados por frequência.
+
+Estrutura:
+
+- `src/search_app.py`: execução manual;
+- `src/search/search_service.py`: fachada da busca;
+- `src/pipeline/`: infraestrutura do pipeline;
+- `src/stages/`: etapas de preprocessamento, tokenização, consulta e ranking;
+- `src/storage/index_repository.py`: índice invertido em memória para consulta.
+
+Leitura arquitetural:
+
+- esses dois módulos continuam relevantes como protótipos funcionais da lógica de recuperação da informação;
+- porém ainda estão fora do fluxo da API FastAPI e do schema PostgreSQL principal.
+
+## 5. Testes
+
+### `backend/tests/`
+
+- `test_main.py`: teste de sanidade do endpoint raiz.
+- `__init__.py`: marcador de pacote.
+
+Observação importante:
+
+- o teste atual ainda espera a mensagem antiga `{"message": "IFESDOC API running"}`;
+- o `main.py` agora retorna `{"message": "IFESDOC rodando 🚀"}`;
+- isso indica que a camada de testes já ficou defasada em relação à implementação atual.
+
+## 6. Relação entre as camadas do backend principal
+
+### Fluxo atual de autenticação
+
+```text
+POST /api/v1/auth/login
+  -> auth_routes.login()
+    -> AuthService.login()
+      -> UserRepository.get_by_login_or_email()
+      -> verify_password()
+      -> create_access_token()
+    -> TokenResponse
+```
+
+### Fluxo atual de usuário autenticado
+
+```text
+GET /api/v1/auth/me
+  -> Depends(get_current_user)
+    -> HTTPBearer
+    -> decode_token()
+    -> UserRepository/ORM query em User
+  -> auth_routes.me()
+```
+
+## 7. Estado atual da arquitetura backend
+
+### O que já está consolidado
+
+- FastAPI com `lifespan`, CORS e handlers globais de erro;
+- configuração centralizada com `pydantic-settings`;
+- conexão PostgreSQL via SQLAlchemy;
+- modelo ORM de usuário;
+- autenticação JWT com hash bcrypt;
+- rotas `/api/v1/auth/login` e `/api/v1/auth/me`;
+- schema SQL completo do banco;
+- seed de administrador;
+- `Dockerfile` da API.
+
+### O que está parcialmente consolidado
+
+- repositórios e services reais existem apenas para autenticação;
+- o domínio completo já está modelado no banco, mas não no Python;
+- há coexistência de SQLAlchemy e um driver `psycopg2` solto;
+- pipelines de indexação e busca ainda não foram absorvidos pela API principal.
+
+### O que ainda está em aberto
+
+- rotas REST dos demais domínios consumidos pelo frontend;
+- integração do JWT do login com os outros endpoints;
+- implementação de documentos, busca, métricas, ingestão, histórico e configurações na camada `app`;
+- convergência entre schema relacional, ORM e pipelines especializados.
+
+## Diagnóstico final
+
+O backend já não é mais apenas um esqueleto. A arquitetura principal entrou em fase operacional com autenticação real, banco configurado, seed inicial e modelo ORM funcional. Ainda assim, o sistema segue dividido em duas frentes:
+
+- `backend/app`: aplicação real em consolidação, hoje centrada em autenticação;
+- `pipeline_indexador` e `pipeline_busca`: motores experimentais que preservam a lógica de indexação e recuperação, porém fora da API principal.
+
+Isso torna os documentos de arquitetura importantes para versionamento porque o repositório passou a ter uma transição clara entre arquitetura planejada e arquitetura efetivamente em uso.

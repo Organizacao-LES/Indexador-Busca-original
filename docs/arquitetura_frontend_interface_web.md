@@ -2,21 +2,20 @@
 
 ## Visão geral
 
-O frontend do IFESDOC é uma SPA construída com React 18, TypeScript e Vite. A aplicação foi organizada para operar em dois modos:
+O frontend do IFESDOC é uma SPA em React 18 + TypeScript + Vite voltada para operação administrativa e consulta documental. A arquitetura atual foi desenhada para funcionar em modo híbrido:
 
-- `mock-first`: a interface funciona mesmo sem backend completo, usando `mock-data.ts`.
-- `API real`: a mesma camada de serviços troca o mock por chamadas HTTP para a API FastAPI.
+- `mock-first`: a maior parte dos módulos continua operando com dados simulados;
+- `API real`: a autenticação já possui backend FastAPI disponível, e a camada de serviços já está preparada para migrar os demais módulos.
 
-Arquiteturalmente, o frontend adota uma separação simples entre:
+Na prática, o frontend está organizado em cinco blocos principais:
 
-- composição global da aplicação;
-- navegação e proteção de rotas;
-- estado de autenticação;
+- bootstrap e infraestrutura de runtime;
+- shell da aplicação e roteamento;
+- sessão/autenticação;
 - acesso a dados por serviços e hooks;
-- páginas de negócio;
-- biblioteca visual reutilizável.
+- páginas de negócio e biblioteca de UI.
 
-## Fluxo arquitetural
+## Fluxo arquitetural atual
 
 ```text
 main.tsx
@@ -25,6 +24,7 @@ main.tsx
     -> AuthProvider
     -> TooltipProvider / Toasters
     -> BrowserRouter
+      -> /login
       -> ProtectedRoute
         -> AppLayout
           -> AppSidebar
@@ -33,55 +33,57 @@ main.tsx
             -> hooks/use-app-query
               -> lib/api/services
                 -> lib/api/client
-                -> lib/api/mock-data
+                -> backend real ou mock-data
 ```
 
-## Stack e responsabilidades
+## Stack
 
-- `React 18`: renderização declarativa e composição de componentes.
-- `TypeScript`: tipagem dos contratos da interface e da API.
-- `Vite`: build, dev server e resolução de módulos.
-- `React Router DOM`: roteamento da SPA.
-- `@tanstack/react-query`: cache, sincronização e ciclo de vida de consultas remotas.
-- `Tailwind CSS`: estilização utilitária e tokens visuais.
-- `shadcn/ui` + `Radix UI`: base dos componentes reutilizáveis.
-- `Vitest` + Testing Library: testes unitários do frontend.
+- `React 18`: composição de componentes e renderização da SPA.
+- `TypeScript`: tipagem dos contratos da interface.
+- `Vite`: ambiente de desenvolvimento, build e alias de módulos.
+- `React Router DOM`: navegação e proteção de rotas.
+- `@tanstack/react-query`: cache, sincronização e ciclo de vida das consultas.
+- `Tailwind CSS`: base de estilo utilitário.
+- `shadcn/ui` + `Radix UI`: sistema de componentes reutilizáveis.
+- `Vitest` + Testing Library: infraestrutura de testes frontend.
 
 ## Estrutura de diretórios e função de cada pacote
 
 ### Raiz `interface-web/`
 
-- `package.json`: define dependências, scripts de build, lint e testes.
-- `vite.config.ts`: configura Vite, alias `@`, porta `8080` e plugin React SWC.
-- `tailwind.config.ts`: centraliza tokens, cores semânticas, animações e tema.
-- `postcss.config.js`: integra Tailwind ao pipeline CSS.
-- `components.json`: configura o ecossistema `shadcn/ui` e os aliases de código.
-- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`: tipagem e compilação TypeScript.
-- `eslint.config.js`: regras de lint.
-- `vitest.config.ts`: configuração dos testes.
-- `index.html`: ponto de montagem da SPA no DOM.
-- `.env.example`: variáveis de ambiente do frontend.
-- `README.md`: guia operacional do módulo frontend.
-- `public/`: ativos estáticos servidos sem transformação.
+- `package.json`: define scripts, dependências de runtime e ferramentas de desenvolvimento.
+- `vite.config.ts`: configura o Vite, porta `8080`, HMR e alias `@`.
+- `tailwind.config.ts`: define tokens visuais, cores semânticas, animações e tema.
+- `postcss.config.js`: integra Tailwind ao processamento CSS.
+- `components.json`: configuração do ecossistema `shadcn/ui`.
+- `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`: configuração TypeScript.
+- `eslint.config.js`: lint do projeto.
+- `vitest.config.ts`: configuração de testes.
+- `index.html`: documento base da SPA.
+- `.env.example`: variáveis de ambiente públicas do frontend.
+- `.env`: configuração local efetiva da interface.
+- `Dockerfile`: container de desenvolvimento do frontend com Node 20 e `npm run dev`.
+- `README.md`: guia de execução do módulo.
+- `public/`: arquivos estáticos.
 - `src/`: código-fonte da aplicação.
-- `dist/`: saída de build gerada pelo Vite.
-- `node_modules/`: dependências instaladas localmente.
+- `dist/`: build gerado.
+- `node_modules/`: dependências instaladas.
 
 ### `public/`
 
 - `favicon.ico`: ícone da aplicação.
 - `robots.txt`: instruções para crawlers.
-- `placeholder.svg`: ativo visual auxiliar.
+- `placeholder.svg`: asset estático auxiliar.
 
 ### `src/`
 
-É o núcleo da aplicação. Reúne bootstrap, layout, páginas, acesso a dados, contexto, hooks e componentes.
+É o núcleo do frontend.
 
 #### `src/main.tsx`
 
 - ponto de entrada da SPA;
-- monta `App` dentro de `#root`;
-- ativa `StrictMode`.
+- monta `App` em `#root`;
+- executa a aplicação em `StrictMode`.
 
 #### `src/App.tsx`
 
@@ -92,102 +94,112 @@ Responsabilidades:
 - cria o `QueryClient`;
 - injeta `QueryClientProvider`;
 - injeta `AuthProvider`;
-- injeta providers transversais de UI (`Tooltip`, `Toaster`, `Sonner`);
-- define o roteamento principal;
-- separa rotas públicas (`/login`) de rotas protegidas;
-- aplica `AppLayout` às telas autenticadas.
+- injeta `TooltipProvider`, `Toaster` e `Sonner`;
+- define as rotas públicas e protegidas;
+- aplica `AppLayout` ao shell autenticado.
+
+Rotas atuais:
+
+- `/login`
+- `/busca`
+- `/resultados`
+- `/documento/:id`
+- `/ingestao`
+- `/indexacao`
+- `/metricas`
+- `/historico`
+- `/usuarios`
+- `/configuracoes`
 
 #### `src/index.css`
 
-Folha global do frontend.
-
-Responsabilidades:
-
-- importar camadas base do Tailwind;
-- definir variáveis CSS do tema;
-- registrar classes utilitárias específicas do projeto, como estilos de cartões, sidebar e estados visuais.
+- CSS global da aplicação;
+- concentra variáveis CSS, tokens visuais e classes compartilhadas do layout.
 
 #### `src/App.css`
 
-- CSS complementar local;
-- concentra ajustes visuais adicionais fora do escopo do tema global.
+- CSS complementar da aplicação;
+- acomoda ajustes específicos fora da folha global.
 
 ### `src/components/`
 
-Contém componentes compostos da aplicação, mais próximos do domínio da interface do que da biblioteca visual genérica.
+Pacote de componentes compostos do produto.
 
 #### `src/components/AppLayout.tsx`
 
-- layout principal das rotas autenticadas;
-- combina `AppSidebar`, `AppHeader` e `Outlet`;
-- define a estrutura shell da aplicação.
+- estrutura-base das páginas autenticadas;
+- organiza `AppSidebar`, `AppHeader` e a região principal via `Outlet`.
 
 #### `src/components/AppSidebar.tsx`
 
-- navegação lateral persistente;
-- lista as áreas funcionais do sistema;
-- controla logout via `AuthContext`;
-- usa `appEnv.appName` para branding da instância.
+- navegação lateral da aplicação;
+- centraliza menu das áreas funcionais;
+- executa logout via `AuthContext`;
+- usa `appEnv.appName` como identificação visual da instância.
 
 #### `src/components/AppHeader.tsx`
 
-- cabeçalho superior do shell autenticado;
-- oferece busca rápida;
-- exibe estado de sessão do usuário autenticado;
-- concentra ações globais de topo.
+- cabeçalho superior persistente;
+- mostra dados do usuário autenticado;
+- oferece busca rápida que redireciona para `/resultados`.
 
 #### `src/components/ProtectedRoute.tsx`
 
-- guarda de rota;
-- bloqueia acesso sem autenticação;
-- mostra estado de carregamento da sessão;
-- redireciona para `/login` preservando a rota de origem.
-
-#### `src/components/NavLink.tsx`
-
-- componente auxiliar de navegação;
-- padroniza links internos com estados visuais.
+- camada de proteção de rotas;
+- bloqueia acesso sem sessão válida;
+- trata carregamento inicial da sessão;
+- redireciona para `/login`.
 
 #### `src/components/PageState.tsx`
 
-- abstrai estados padrão de tela;
-- evita repetição de loaders e mensagens de erro.
+- abstrai estados de carregamento e erro das páginas;
+- reduz repetição de componentes de feedback.
+
+#### `src/components/NavLink.tsx`
+
+- utilitário de navegação interna com estilo padronizado.
 
 ### `src/components/ui/`
 
-É a biblioteca de componentes de interface reutilizáveis. A maioria dos arquivos é baseada em `shadcn/ui` e `Radix UI`, servindo como camada de apresentação padronizada.
+Biblioteca visual reutilizável baseada em `shadcn/ui` e `Radix UI`.
 
-Função arquitetural do pacote:
+Função arquitetural:
 
-- padronizar botões, inputs, modais, tabelas, seletores e feedback visual;
-- reduzir duplicação de markup e estilo;
-- desacoplar páginas das primitivas de baixo nível.
+- padronizar os blocos de interface;
+- separar páginas de baixo nível visual;
+- manter consistência de estilo e comportamento.
 
 Subgrupos lógicos:
 
-- entrada e formulário: `input.tsx`, `textarea.tsx`, `checkbox.tsx`, `radio-group.tsx`, `select.tsx`, `switch.tsx`, `slider.tsx`, `input-otp.tsx`, `form.tsx`, `label.tsx`.
-- navegação e estrutura: `tabs.tsx`, `breadcrumb.tsx`, `pagination.tsx`, `menubar.tsx`, `navigation-menu.tsx`, `sidebar.tsx`, `sheet.tsx`, `drawer.tsx`, `resizable.tsx`, `scroll-area.tsx`.
+- formulários e entrada: `input.tsx`, `textarea.tsx`, `checkbox.tsx`, `radio-group.tsx`, `select.tsx`, `switch.tsx`, `slider.tsx`, `input-otp.tsx`, `form.tsx`, `label.tsx`.
+- estrutura e navegação: `tabs.tsx`, `breadcrumb.tsx`, `pagination.tsx`, `menubar.tsx`, `navigation-menu.tsx`, `sidebar.tsx`, `sheet.tsx`, `drawer.tsx`, `resizable.tsx`, `scroll-area.tsx`.
 - feedback e overlays: `toast.tsx`, `toaster.tsx`, `sonner.tsx`, `tooltip.tsx`, `alert.tsx`, `alert-dialog.tsx`, `dialog.tsx`, `popover.tsx`, `hover-card.tsx`.
 - visualização de dados: `table.tsx`, `card.tsx`, `badge.tsx`, `avatar.tsx`, `progress.tsx`, `skeleton.tsx`, `chart.tsx`, `calendar.tsx`, `carousel.tsx`.
-- comandos e interação contextual: `command.tsx`, `context-menu.tsx`, `dropdown-menu.tsx`, `accordion.tsx`, `collapsible.tsx`, `toggle.tsx`, `toggle-group.tsx`, `separator.tsx`, `aspect-ratio.tsx`.
-- utilitários de notificação: `use-toast.ts`.
+- interação contextual: `command.tsx`, `context-menu.tsx`, `dropdown-menu.tsx`, `accordion.tsx`, `collapsible.tsx`, `toggle.tsx`, `toggle-group.tsx`, `separator.tsx`, `aspect-ratio.tsx`.
 
-Observação arquitetural:
+Observação:
 
-- `src/components/ui/sidebar.tsx` é uma infraestrutura visual genérica de sidebar, enquanto `src/components/AppSidebar.tsx` implementa a navegação do domínio IFESDOC sobre essa base conceitual.
+- `src/components/ui/sidebar.tsx` é infraestrutura de UI genérica;
+- `src/components/AppSidebar.tsx` é a aplicação dessa infraestrutura ao domínio IFESDOC.
 
 ### `src/contexts/`
 
 #### `src/contexts/AuthContext.tsx`
 
-É a camada de estado global de autenticação.
+Camada global de sessão.
 
 Responsabilidades:
 
-- ler e persistir a sessão no `localStorage`;
+- carregar sessão do `localStorage`;
+- persistir o resultado do login;
 - expor `user`, `isAuthenticated`, `isLoading`, `login` e `logout`;
-- integrar a autenticação à camada de serviços (`authService`);
-- sustentar proteção de rotas e informações de sessão no layout.
+- integrar a interface com `authService`.
+
+Estado arquitetural atual:
+
+- a sessão é persistida localmente;
+- o token JWT retornado pelo backend é armazenado dentro de `SessionUser`;
+- ainda não há refresh token nem revalidação automática da sessão em `/auth/me`.
 
 ### `src/hooks/`
 
@@ -195,191 +207,205 @@ Pacote de hooks compartilhados.
 
 #### `src/hooks/use-app-query.ts`
 
-- centraliza hooks de leitura baseados em `react-query`;
-- encapsula `queryKey`, `queryFn`, políticas de atualização e cache;
-- fornece hooks especializados por domínio, como `useUsers`, `useMetrics`, `useDocument`, `useSearchResults`.
+- centraliza hooks de leitura com `react-query`;
+- encapsula `queryKey`, `queryFn` e políticas de polling/cache;
+- expõe hooks por domínio: busca, documento, usuários, ingestão, indexação, métricas, histórico e configurações.
 
 #### `src/hooks/use-toast.ts`
 
-- hook de notificação visual;
-- integra componentes e páginas ao sistema de toast.
+- abstrai o sistema de notificações visuais.
 
 #### `src/hooks/use-mobile.tsx`
 
-- hook utilitário para responsividade;
-- detecta comportamento/estado voltado a layouts móveis.
+- utilitário para comportamento responsivo.
 
 ### `src/lib/`
 
-Camada de utilidades transversais e acesso a dados.
+Camada de utilidades e integração.
 
 #### `src/lib/env.ts`
 
-- resolve variáveis de ambiente do frontend;
-- controla `apiBaseUrl`, `useMockApi` e `appName`.
+- lê `VITE_API_URL`, `VITE_USE_MOCK_API` e `VITE_APP_NAME`;
+- define o modo operacional do frontend.
 
 #### `src/lib/storage.ts`
 
-- centraliza chaves de persistência do `localStorage`;
-- evita strings mágicas espalhadas.
+- centraliza chaves do `localStorage`, como sessão e configurações.
 
 #### `src/lib/utils.ts`
 
-- utilitários genéricos compartilhados;
-- normalmente usado para concatenação de classes e helpers leves.
+- helpers genéricos leves do frontend.
 
 #### `src/lib/api/`
 
-É a camada de integração do frontend com o backend ou com dados simulados.
+Camada de acesso a dados da aplicação.
 
 ##### `src/lib/api/client.ts`
 
-- cliente HTTP base;
-- compõe URL com query string;
-- injeta headers e token;
-- normaliza tratamento de erro via `ApiError`;
-- abstrai `fetch` para consumo consistente.
+- wrapper HTTP sobre `fetch`;
+- monta URL com query string;
+- injeta `Content-Type`;
+- aceita token opcional;
+- normaliza falhas via `ApiError`.
+
+Observação importante:
+
+- o cliente suporta token Bearer, mas os serviços atuais ainda não injetam o token da sessão automaticamente;
+- isso significa que a autenticação real está pronta para login, mas a autorização dos demais endpoints ainda não foi acoplada de ponta a ponta.
 
 ##### `src/lib/api/services.ts`
 
-- camada de serviço por domínio funcional;
-- expõe `authService`, `searchService`, `documentService`, `userService`, `ingestionService`, `indexService`, `metricsService`, `historyService`, `settingsService`;
-- decide entre mock e API real;
-- concentra os endpoints REST esperados pela interface.
+- camada de serviço por domínio;
+- concentra o contrato consumido pelas páginas;
+- decide entre backend real e dados mockados com base em `VITE_USE_MOCK_API`.
+
+Serviços atuais:
+
+- `authService`
+- `searchService`
+- `documentService`
+- `userService`
+- `ingestionService`
+- `indexService`
+- `metricsService`
+- `historyService`
+- `settingsService`
+
+Estado arquitetural atual:
+
+- `authService.login()` já aponta para `/api/v1/auth/login`;
+- os demais serviços continuam estruturados para REST real, mas dependem de endpoints ainda não implementados ou não integrados.
 
 ##### `src/lib/api/mock-data.ts`
 
-- base mockada de dados de sessão, busca, métricas, usuários, histórico, ingestão e configurações;
-- permite desenvolver o frontend antes da consolidação completa do backend REST.
+- fornece dados simulados para busca, documentos, ingestão, métricas, usuários, histórico e configurações;
+- viabiliza desenvolvimento funcional da interface sem backend completo.
 
 ### `src/pages/`
 
-Camada de páginas roteáveis. Cada arquivo representa uma área funcional da aplicação.
+Camada de páginas roteáveis.
 
 #### `src/pages/LoginPage.tsx`
 
 - tela pública de autenticação;
 - usa `AuthContext`;
-- redireciona o usuário para a rota originalmente solicitada após login.
+- redireciona após login para a rota de origem ou `/busca`.
 
 #### `src/pages/SearchPage.tsx`
 
-- tela inicial de busca;
-- captura consulta principal;
-- exibe filtros avançados;
-- mostra histórico de buscas recentes.
+- tela principal de consulta;
+- captura texto de busca;
+- mostra filtros avançados;
+- exibe buscas recentes.
 
 #### `src/pages/ResultsPage.tsx`
 
-- apresenta os resultados paginados da busca;
-- lê query string da URL;
+- lista resultados da consulta;
+- lê parâmetros da URL;
 - usa `useSearchResults`;
-- permite navegação para o documento detalhado.
+- trata paginação no client-side da rota.
 
 #### `src/pages/DocumentViewPage.tsx`
 
-- visualização detalhada de documento;
-- exibe metadados, conteúdo e ações como reindexação e download;
-- consome `useDocument`.
+- detalha um documento;
+- mostra metadados, conteúdo e ações como download e reindexação.
 
 #### `src/pages/IngestionPage.tsx`
 
-- módulo de ingestão;
-- representa upload individual, lote e histórico;
-- simula o pipeline operacional de validação, extração e indexação.
+- representa o fluxo de ingestão;
+- combina upload, lote e histórico;
+- simula etapas operacionais do pipeline documental.
 
 #### `src/pages/IndexStatusPage.tsx`
 
-- observabilidade da indexação;
-- apresenta progresso, resumo de execução, taxa de sucesso e logs operacionais.
+- painel de status da indexação;
+- mostra progresso, resumo e logs.
 
 #### `src/pages/MetricsPage.tsx`
 
-- dashboard analítico;
-- usa gráficos e indicadores para consultas, termos mais buscados e distribuição documental.
+- dashboard analítico com indicadores e gráficos.
 
 #### `src/pages/HistoryPage.tsx`
 
-- auditoria operacional;
-- lista eventos por data, usuário, ação e status.
+- área de auditoria e histórico operacional.
 
 #### `src/pages/UsersPage.tsx`
 
-- gestão administrativa de usuários;
-- permite visualizar, ativar/inativar, criar e editar perfis no nível de interface.
+- gestão de usuários no nível da interface;
+- modela cadastro, edição e ativação/inativação.
 
 #### `src/pages/SettingsPage.tsx`
 
-- configurações da instância;
-- persiste preferências operacionais e parâmetros do frontend.
+- preferências e parâmetros operacionais do sistema.
 
 #### `src/pages/NotFound.tsx`
 
-- fallback para rotas não mapeadas;
-- trata navegação inválida.
+- fallback para rotas inexistentes.
 
 #### `src/pages/Index.tsx`
 
 - página residual de template;
-- atualmente não participa do fluxo principal da aplicação.
+- não participa do fluxo principal do produto.
 
 ### `src/types/`
 
 #### `src/types/app.ts`
 
-- contrato tipado do frontend;
-- define modelos de usuário, sessão, busca, documento, ingestão, métricas, histórico e configurações;
-- funciona como fronteira tipada entre UI e camada de serviço.
+- define os contratos tipados do frontend;
+- modela usuário, sessão, busca, documento, ingestão, métricas, histórico e configurações.
+
+Observação:
+
+- `SessionUser` contém `token`, refletindo a integração atual com JWT do backend.
 
 ### `src/test/`
 
-#### `src/test/setup.ts`
+- `setup.ts`: bootstrap do ambiente de testes.
+- `example.test.ts`: teste inicial de sanidade.
 
-- bootstrap do ambiente de testes frontend.
+## Relação entre as camadas
 
-#### `src/test/example.test.ts`
+### 1. Bootstrap
 
-- teste básico de exemplo;
-- evidencia que a estrutura de testes já está preparada, mas ainda com cobertura inicial.
-
-## Como as camadas se relacionam
-
-### 1. Bootstrap e infraestrutura
-
-- `main.tsx` inicializa a aplicação.
+- `main.tsx` inicializa a SPA;
 - `App.tsx` injeta providers e rotas.
-- `vite.config.ts` e `tailwind.config.ts` sustentam o runtime e a camada visual.
 
-### 2. Sessão e acesso
+### 2. Sessão
 
-- `AuthContext` mantém sessão persistida.
-- `ProtectedRoute` protege a navegação.
-- `AppHeader` e `AppSidebar` refletem o estado autenticado.
+- `AuthContext` controla autenticação local;
+- `ProtectedRoute` protege o shell autenticado;
+- `AppHeader` e `AppSidebar` consomem o estado da sessão.
 
 ### 3. Dados
 
 - páginas chamam hooks de `use-app-query`;
 - hooks chamam `services.ts`;
-- `services.ts` decide entre `mock-data.ts` e `client.ts`;
-- `client.ts` centraliza o HTTP.
+- `services.ts` decide entre mock e API real;
+- `client.ts` faz o transporte HTTP.
 
 ### 4. Apresentação
 
-- páginas descrevem o comportamento de cada caso de uso;
-- `components/` organiza o layout do produto;
-- `components/ui/` oferece os blocos visuais reutilizáveis.
+- `pages/` implementa os casos de uso da interface;
+- `components/` organiza o shell do produto;
+- `components/ui/` fornece as primitivas visuais reutilizáveis.
 
-## Características arquiteturais relevantes
+## Estado atual da arquitetura frontend
 
-- forte desacoplamento entre páginas e transporte HTTP;
-- fallback mockado como estratégia de desenvolvimento incremental;
-- cache e sincronização centralizados em React Query;
-- autenticação simples orientada a sessão em `localStorage`;
-- shell administrativo único para todas as áreas autenticadas;
-- biblioteca de UI compartilhada para consistência visual.
+### O que está consolidado
 
-## Limitações e estado atual
+- shell autenticado com rotas protegidas;
+- persistência local de sessão;
+- camada de serviços centralizada;
+- uso de React Query para leitura de dados;
+- biblioteca visual reutilizável;
+- container de desenvolvimento via `Dockerfile`.
 
-- a integração REST prevista em `services.ts` depende de endpoints que ainda não estão implementados integralmente no backend;
-- parte das ações das páginas ainda simula comportamento com `toast`, `setTimeout` e mocks;
-- existe uma base robusta de interface, mas a consolidação final depende da convergência com a API FastAPI.
+### O que está parcialmente consolidado
+
+- autenticação com backend real já existe para login;
+- a sessão é armazenada com JWT, mas ainda sem consumo automático do token nos demais serviços;
+- a maior parte dos módulos operacionais ainda depende de mocks.
+
+### Consequência prática
+
+O frontend já tem arquitetura estável para versionamento e evolução incremental. O principal ponto em aberto não é estrutural, e sim de integração: migrar progressivamente os serviços hoje mockados para os endpoints reais do backend.
