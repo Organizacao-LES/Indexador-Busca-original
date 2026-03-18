@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "npm run autoinstall && npm run dev",
+    "autoinstall":"npx npm-check-updates -u && npm install",
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
