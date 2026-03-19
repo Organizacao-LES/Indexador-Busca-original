@@ -21,7 +21,7 @@ services:
 
   backend:
     build:
-      context: ..
+      context: ../backend
       dockerfile: backend/Dockerfile
     container_name: ifesdoc_backend
     depends_on:
@@ -38,7 +38,7 @@ services:
 
   frontend:
     build:
-      context: ..
+      context: ../frontend
       dockerfile: interface-web/Dockerfile
     container_name: ifesdoc_frontend
     depends_on:
