@@ -1,2 +1,3 @@
 @echo off
-docker build
+docker compose up -d --build
+docker ps
