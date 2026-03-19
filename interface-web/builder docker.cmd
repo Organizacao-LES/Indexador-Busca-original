@@ -8,7 +8,7 @@ echo %cd%
 echo ==========================
 echo.
 
-docker build -t backend .
-docker run -d -p 8000:8000 --name backend_%computername% backend
+docker build -t frontend .
+docker run -d -p 8080:8080 --name frontend_%computername% frontend
 docker ps
 timeout 10
