@@ -1,12 +1,15 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
 
 from app.services.user_service import UserService
 from app.repositories.user_repository import UserRepository
 from app.schemas.user_schema import UserCreate
 from app.domain.user import User
+from app.exceptions.user_exceptions import (
+    UserConflictException,
+    UserNotFoundException,
+)
 
 
 @pytest.fixture
@@ -46,7 +49,7 @@ def test_create_user_success(
     )
 
     # Act
-    with patch("app.core.security.get_password_hash", return_value="hashed_password"):
+    with patch("app.services.user_service.hash_password", return_value="hashed_password"):
         created_user = user_service.create_user(db_session_mock, user_create)
 
     # Assert
@@ -69,7 +72,7 @@ def test_create_user_login_conflict(
     user_repository_mock.get_by_login.return_value = User(login="existinguser")
 
     # Act & Assert
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(UserConflictException) as excinfo:
         user_service.create_user(db_session_mock, user_create)
     assert excinfo.value.status_code == 409
     assert "Login already in use" in excinfo.value.detail
@@ -100,7 +103,7 @@ def test_get_user_by_id_not_found(
     user_repository_mock.get_by_id.return_value = None
 
     # Act & Assert
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(UserNotFoundException) as excinfo:
         user_service.get_user_by_id(db_session_mock, user_id)
     assert excinfo.value.status_code == 404
     assert "User not found" in excinfo.value.detail

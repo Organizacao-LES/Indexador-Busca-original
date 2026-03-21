@@ -7,7 +7,7 @@ from app.exceptions.user_exceptions import (
 from app.domain.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.user_schema import UserCreate, UserUpdate
-from app.core.security import get_password_hash
+from app.core.security import hash_password
 
 
 class UserService:
@@ -26,18 +26,15 @@ class UserService:
             The created user.
 
         Raises:
-            HTTPException: If a user with the same login or email already exists.
+            UserConflictException: If a user with the same login or email already exists.
         """
         if self.user_repository.get_by_login(db, user_create.login):
             raise UserConflictException(detail="Login already in use.")
 
         if self.user_repository.get_by_email(db, user_create.email):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already in use.",
-            )
+            raise UserConflictException(detail="Email already in use.")
 
-        hashed_password = get_password_hash(user_create.senha)
+        hashed_password = hash_password(user_create.senha)
         db_user = User(
             **user_create.model_dump(exclude={"senha"}),
             senha_hash=hashed_password
@@ -56,14 +53,11 @@ class UserService:
             The user.
 
         Raises:
-            HTTPException: If the user is not found.
+            UserNotFoundException: If the user is not found.
         """
         user = self.user_repository.get_by_id(db, user_id)
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found.",
-            )
+            raise UserNotFoundException(detail="User not found.")
         return user
 
     def get_all_users(self, db: Session, skip: int, limit: int) -> list[User]:
@@ -95,7 +89,7 @@ class UserService:
             The updated user.
 
         Raises:
-            HTTPException: If the user is not found or if the new login/email is already in use.
+            UserConflictException: If the new login/email is already in use.
         """
         user = self.get_user_by_id(db, user_id)
 
@@ -103,20 +97,14 @@ class UserService:
 
         if "login" in update_data and update_data["login"] != user.login:
             if self.user_repository.get_by_login(db, update_data["login"]):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Login already in use.",
-                )
+                raise UserConflictException(detail="Login already in use.")
 
         if "email" in update_data and update_data["email"] != user.email:
             if self.user_repository.get_by_email(db, update_data["email"]):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Email already in use.",
-                )
+                raise UserConflictException(detail="Email already in use.")
 
         if "senha" in update_data:
-            update_data["senha_hash"] = get_password_hash(update_data.pop("senha"))
+            update_data["senha_hash"] = hash_password(update_data.pop("senha"))
 
         return self.user_repository.update(db, user, UserUpdate(**update_data))
 

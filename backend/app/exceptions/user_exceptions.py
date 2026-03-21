@@ -1,23 +1,16 @@
-# app/exceptions/user_exceptions.py
+from fastapi import HTTPException, status
 
-class UserException(Exception):
-    """Base exception for user-related errors."""
-    pass
+
+class UserException(HTTPException):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(status_code=status_code, detail=detail)
+
 
 class UserNotFoundException(UserException):
-    """Raised when a user is not found."""
     def __init__(self, detail: str = "User not found."):
-        self.detail = detail
-        super().__init__(self.detail)
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+
 
 class UserConflictException(UserException):
-    """Raised when a user creation or update conflicts with existing data (e.g., duplicate login/email)."""
     def __init__(self, detail: str = "User conflict."):
-        self.detail = detail
-        super().__init__(self.detail)
-
-class UserPermissionException(UserException):
-    """Raised when a user does not have the necessary permissions."""
-    def __init__(self, detail: str = "Operation not permitted."):
-        self.detail = detail
-        super().__init__(self.detail)
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
