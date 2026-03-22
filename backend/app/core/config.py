@@ -9,7 +9,7 @@ load_dotenv(BASE_DIR / ".env")
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_URL: str = "192.168.6.100:5432"
     SECRET_KEY: str = "super-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

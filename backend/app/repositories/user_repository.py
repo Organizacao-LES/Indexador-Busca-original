@@ -14,10 +14,12 @@ class UserRepository:
 
     @staticmethod
     def get_by_email(db: Session, email: str) -> User | None:
+        print(f"Searching for user with email: {email}")
         return db.query(User).filter(User.email == email).first()
 
     @staticmethod
     def get_by_login_or_email(db: Session, identifier: str) -> User | None:
+        print(f"Searching for user with identifier: {identifier}")
         return (
             db.query(User)
             .filter(or_(User.login == identifier, User.email == identifier))
