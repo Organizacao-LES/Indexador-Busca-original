@@ -146,7 +146,7 @@ jobs:
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -X POST http://localhost:8000/api/v1/auth/login \
             -H "Content-Type: application/json" \
-            -d '{"login": "admin", "password": "admin"}')
+            -d '{"email": "admin@ifes.edu.br", "password": "admin123"}')
 
           BODY=$(echo "$RESPONSE" | head -n -1)
           STATUS=$(echo "$RESPONSE" | tail -n 1)
