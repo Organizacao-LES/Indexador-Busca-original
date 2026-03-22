@@ -1,0 +1,370 @@
+ O volume na unidade D ‚ EXTRA
+ O N£mero de S‚rie do Volume ‚ F834-3B4A
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend
+
+22/03/2026  13:46    <DIR>          .
+22/03/2026  13:46    <DIR>          ..
+19/03/2026  10:27               156 .dockerignore
+22/03/2026  13:45    <DIR>          app
+19/03/2026  10:42               303 build docker.cmd
+19/03/2026  10:36               502 Dockerfile
+22/03/2026  13:42               718 Dockerfile.windows
+18/03/2026  13:31    <DIR>          pipeline_busca
+18/03/2026  13:31    <DIR>          pipeline_indexador
+18/03/2026  13:31    <DIR>          tests
+22/03/2026  13:46                 0 tree.txt
+               5 arquivo(s)          1.679 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app
+
+22/03/2026  13:45    <DIR>          .
+22/03/2026  13:45    <DIR>          ..
+21/03/2026  13:42               124 .env
+22/03/2026  13:40    <DIR>          .vscode
+18/03/2026  13:49    <DIR>          adapters
+18/03/2026  13:31    <DIR>          api
+21/03/2026  13:36    <DIR>          core
+21/03/2026  13:36    <DIR>          domain
+21/03/2026  13:36    <DIR>          exceptions
+22/03/2026  13:39               109 freeze_generate.cmd
+22/03/2026  13:39             2.651 freeze_generated_requirements.txt
+21/03/2026  13:08            16.457 gemini.md
+18/03/2026  14:36             2.461 main.py
+18/03/2026  13:49    <DIR>          pipeline
+21/03/2026  13:44    <DIR>          repositories
+21/03/2026  13:44    <DIR>          schemas
+21/03/2026  13:36    <DIR>          services
+21/03/2026  13:27                40 start-agent-gemini.cmd
+18/03/2026  16:22                85 start.cmd
+18/03/2026  13:49    <DIR>          strategies
+21/03/2026  13:36    <DIR>          tests
+18/03/2026  13:31    <DIR>          utils
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:36    <DIR>          __pycache__
+               8 arquivo(s)         21.927 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\.vscode
+
+22/03/2026  13:40    <DIR>          .
+22/03/2026  13:40    <DIR>          ..
+21/03/2026  13:24                63 extensions.json
+22/03/2026  13:40                86 settings.json
+               2 arquivo(s)            149 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\adapters
+
+18/03/2026  13:49    <DIR>          .
+18/03/2026  13:49    <DIR>          ..
+18/03/2026  13:31                 0 __init__.py
+               1 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\api
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+21/03/2026  13:31    <DIR>          v1
+               0 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\api\v1
+
+21/03/2026  13:31    <DIR>          .
+21/03/2026  13:31    <DIR>          ..
+18/03/2026  14:36             1.058 auth_routes.py
+21/03/2026  13:31               279 router.py
+21/03/2026  13:31             2.319 user_routes.py
+18/03/2026  13:31                 0 __init__.py
+               4 arquivo(s)          3.656 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\core
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:44               759 config.py
+18/03/2026  14:36               420 database.py
+18/03/2026  14:36             1.509 dependencies.py
+18/03/2026  14:36               963 security.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:45    <DIR>          __pycache__
+               5 arquivo(s)          3.651 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\core\__pycache__
+
+21/03/2026  13:45    <DIR>          .
+21/03/2026  13:45    <DIR>          ..
+21/03/2026  13:44             1.601 config.cpython-314.pyc
+21/03/2026  13:36               824 database.cpython-314.pyc
+21/03/2026  13:45             2.564 security.cpython-314.pyc
+21/03/2026  13:36               180 __init__.cpython-314.pyc
+               4 arquivo(s)          5.169 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\domain
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:28               826 user.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:36    <DIR>          __pycache__
+               2 arquivo(s)            826 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\domain\__pycache__
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:36             1.376 user.cpython-314.pyc
+21/03/2026  13:36               182 __init__.cpython-314.pyc
+               2 arquivo(s)          1.558 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\exceptions
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:48               578 user_exceptions.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:49    <DIR>          __pycache__
+               2 arquivo(s)            578 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\exceptions\__pycache__
+
+21/03/2026  13:49    <DIR>          .
+21/03/2026  13:49    <DIR>          ..
+21/03/2026  13:49             2.374 user_exceptions.cpython-314.pyc
+21/03/2026  13:36               186 __init__.cpython-314.pyc
+               2 arquivo(s)          2.560 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\pipeline
+
+18/03/2026  13:49    <DIR>          .
+18/03/2026  13:49    <DIR>          ..
+18/03/2026  13:31                 0 __init__.py
+               1 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\repositories
+
+21/03/2026  13:44    <DIR>          .
+21/03/2026  13:44    <DIR>          ..
+18/03/2026  13:31               437 postgresql_driver.py
+21/03/2026  13:30             1.540 user_repository.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:44    <DIR>          __pycache__
+               3 arquivo(s)          1.977 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\repositories\__pycache__
+
+21/03/2026  13:44    <DIR>          .
+21/03/2026  13:44    <DIR>          ..
+21/03/2026  13:44             4.918 user_repository.cpython-314.pyc
+21/03/2026  13:44               188 __init__.cpython-314.pyc
+               2 arquivo(s)          5.106 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\schemas
+
+21/03/2026  13:44    <DIR>          .
+21/03/2026  13:44    <DIR>          ..
+18/03/2026  14:36               754 auth_schema.py
+21/03/2026  13:29               917 user_schema.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:44    <DIR>          __pycache__
+               3 arquivo(s)          1.671 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\schemas\__pycache__
+
+21/03/2026  13:44    <DIR>          .
+21/03/2026  13:44    <DIR>          ..
+21/03/2026  13:44             2.959 user_schema.cpython-314.pyc
+21/03/2026  13:44               183 __init__.cpython-314.pyc
+               2 arquivo(s)          3.142 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\services
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+18/03/2026  14:36             1.893 auth_service.py
+21/03/2026  13:48             4.134 user_service.py
+18/03/2026  13:31                 0 __init__.py
+21/03/2026  13:49    <DIR>          __pycache__
+               3 arquivo(s)          6.027 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\services\__pycache__
+
+21/03/2026  13:49    <DIR>          .
+21/03/2026  13:49    <DIR>          ..
+21/03/2026  13:49             6.292 user_service.cpython-314.pyc
+21/03/2026  13:36               184 __init__.cpython-314.pyc
+               2 arquivo(s)          6.476 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\strategies
+
+18/03/2026  13:49    <DIR>          .
+18/03/2026  13:49    <DIR>          ..
+18/03/2026  13:31                 0 __init__.py
+               1 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\tests
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:36    <DIR>          services
+21/03/2026  13:33                 0 __init__.py
+21/03/2026  13:36    <DIR>          __pycache__
+               1 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\tests\services
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:49             3.310 test_user_service.py
+21/03/2026  13:33                 0 __init__.py
+21/03/2026  13:49    <DIR>          __pycache__
+               2 arquivo(s)          3.310 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\tests\services\__pycache__
+
+21/03/2026  13:49    <DIR>          .
+21/03/2026  13:49    <DIR>          ..
+21/03/2026  13:49            11.007 test_user_service.cpython-314-pytest-9.0.2.pyc
+21/03/2026  13:36               190 __init__.cpython-314.pyc
+               2 arquivo(s)         11.197 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\tests\__pycache__
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:36               181 __init__.cpython-314.pyc
+               1 arquivo(s)            181 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\utils
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31                 0 pagination.py
+18/03/2026  13:31                 0 text_processing.py
+18/03/2026  13:31                 2 time_utils.py
+18/03/2026  13:31                 0 __init__.py
+               4 arquivo(s)              2 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\app\__pycache__
+
+21/03/2026  13:36    <DIR>          .
+21/03/2026  13:36    <DIR>          ..
+21/03/2026  13:36               175 __init__.cpython-314.pyc
+               1 arquivo(s)            175 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31    <DIR>          src
+               0 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca\src
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31    <DIR>          pipeline
+18/03/2026  13:31    <DIR>          search
+18/03/2026  13:31               457 search_app.py
+18/03/2026  13:31    <DIR>          stages
+18/03/2026  13:31    <DIR>          storage
+               1 arquivo(s)            457 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca\src\pipeline
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               411 pipeline_stage.py
+18/03/2026  13:31             1.038 search_pipeline.py
+               2 arquivo(s)          1.449 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca\src\search
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31             1.419 search_service.py
+               1 arquivo(s)          1.419 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca\src\stages
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               619 queryPreprocessStage.py
+18/03/2026  13:31               724 queryTokenizeStage.py
+18/03/2026  13:31               787 rankResultsStage.py
+18/03/2026  13:31               867 searchIndexStage.py
+               4 arquivo(s)          2.997 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_busca\src\storage
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31             2.707 index_repository.py
+               1 arquivo(s)          2.707 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               347 app.py
+18/03/2026  13:31    <DIR>          src
+               1 arquivo(s)            347 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31    <DIR>          indexer
+18/03/2026  13:31    <DIR>          pipeline
+18/03/2026  13:31    <DIR>          stages
+18/03/2026  13:31    <DIR>          storage
+18/03/2026  13:31    <DIR>          tests
+               0 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src\indexer
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               988 indexer_service.py
+               1 arquivo(s)            988 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src\pipeline
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               722 index_pipeline.py
+18/03/2026  13:31               396 pipeline_stage.py
+               2 arquivo(s)          1.118 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src\stages
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               621 index_build_stage.py
+18/03/2026  13:31               537 preprocess_stage.py
+18/03/2026  13:31               535 tokenize_stage.py
+               3 arquivo(s)          1.693 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src\storage
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               766 index_repository.py
+               1 arquivo(s)            766 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\pipeline_indexador\src\tests
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31                 0 pipeline_test.py
+               1 arquivo(s)              0 bytes
+
+ Pasta de D:\Projetos Temporarios\DEV-Indexador-Busca-original\backend\tests
+
+18/03/2026  13:31    <DIR>          .
+18/03/2026  13:31    <DIR>          ..
+18/03/2026  13:31               145 test_main.py
+18/03/2026  13:31                 0 __init__.py
+               2 arquivo(s)            145 bytes
+
+     Total de Arquivos na Lista:
+              85 arquivo(s)         95.103 bytes
+             119 pasta(s)   12.815.577.088 bytes dispon¡veis
