@@ -15,7 +15,9 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     Dependency to ensure the current user is an administrator.
     """
+    print(f"Checking admin access for user {current_user.cod_usuario} with profile {current_user.perfil}.")
     if current_user.perfil != "ADMIN":
+        print(f"User {current_user.cod_usuario} attempted to access admin-only route.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Operation not permitted.",
@@ -40,6 +42,7 @@ def create_user(user_create: UserCreate, db: Session = Depends(get_db)):
 def read_users(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
+    print(f"Admin user is retrieving users with skip={skip} and limit={limit}.")
     """
     Retrieve all users. (Admin only)
     """
