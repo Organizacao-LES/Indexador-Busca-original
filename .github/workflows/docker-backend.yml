@@ -33,14 +33,14 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U ifesdoc_user -d ifesdoc"
+          --health-cmd "pg_isready -U IFESDOC -d ifesdoc"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
           --health-start-period 15s
 
     env:
-      DATABASE_URL: postgresql://ifesdoc_user:ifesdoc_pass@localhost:5433/ifesdoc
+      DATABASE_URL: postgresql://IFESDOC:adminIfes@localhost:5433/ifesdoc
       SECRET_KEY: ci_secret_key_nao_usar_em_prod
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
@@ -55,15 +55,15 @@ jobs:
       - name: Apply database schema and seed
         run: |
           echo "Aplicando schema..."
-          PGPASSWORD=ifesdoc_pass psql \
+          PGPASSWORD=adminIfes psql \
             -h localhost -p 5433 \
-            -U ifesdoc_user -d ifesdoc \
+            -U IFESDOC -d ifesdoc \
             -f docker/postgres/init/01_schema.sql
 
           echo "Aplicando seed admin..."
-          PGPASSWORD=ifesdoc_pass psql \
+          PGPASSWORD=adminIfes psql \
             -h localhost -p 5433 \
-            -U ifesdoc_user -d ifesdoc \
+            -U IFESDOC -d ifesdoc \
             -f docker/postgres/init/02_admin.sql
 
       # ── 3. Buildx com cache GHA ───────────────────────────────────────────────
