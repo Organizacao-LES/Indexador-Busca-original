@@ -8,6 +8,6 @@ const parseBoolean = (value: string | undefined, fallback: boolean) => {
 
 export const appEnv = {
   apiBaseUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
-  useMockApi: parseBoolean(import.meta.env.VITE_USE_MOCK_API, true),
+  useMockApi: parseBoolean(import.meta.env.VITE_USE_MOCK_API, false),
   appName: import.meta.env.VITE_APP_NAME || "IFESDOC",
 };
