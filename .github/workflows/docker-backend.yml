@@ -22,7 +22,7 @@ jobs:
     name: Build & Smoke Test
     runs-on: ubuntu-latest
 
-    # ── Serviço PostgreSQL paralelo ao job ────────────────────────────────────
+    # ── Postgres sobe em paralelo ao job ──────────────────────────────────────
     services:
       postgres:
         image: postgres:16
@@ -51,42 +51,38 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Aplica o schema SQL no postgres do servico ────────────────────────
-      - name: Apply database schema
+      # ── 2. Schema e seed no postgres ─────────────────────────────────────────
+      - name: Apply database schema and seed
         run: |
-          echo "Aplicando schema do banco..."
+          echo "Aplicando schema..."
           PGPASSWORD=ifesdoc_pass psql \
-            -h localhost \
-            -p 5433 \
-            -U ifesdoc_user \
-            -d ifesdoc \
+            -h localhost -p 5433 \
+            -U ifesdoc_user -d ifesdoc \
             -f docker/postgres/init/01_schema.sql
 
-          echo "Aplicando seed de admin..."
+          echo "Aplicando seed admin..."
           PGPASSWORD=ifesdoc_pass psql \
-            -h localhost \
-            -p 5433 \
-            -U ifesdoc_user \
-            -d ifesdoc \
+            -h localhost -p 5433 \
+            -U ifesdoc_user -d ifesdoc \
             -f docker/postgres/init/02_admin.sql
 
-      # ── 3. Buildx com cache ──────────────────────────────────────────────────
+      # ── 3. Buildx com cache GHA ───────────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 4. Build da imagem do backend ────────────────────────────────────────
+      # ── 4. Build — context = backend/, igual ao seu build docker.cmd ─────────
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./backend/Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile.windows
           push: false
           load: true
           tags: ifesdoc-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── 5. Sobe o container apontando para o postgres do servico ─────────────
+      # ── 5. Run apontando para o postgres do servico ───────────────────────────
       - name: Run container
         run: |
           docker run -d \
@@ -99,10 +95,10 @@ jobs:
             -e BACKEND_CORS_ORIGINS="${BACKEND_CORS_ORIGINS}" \
             ifesdoc-backend:ci
 
-      # ── 6. Aguarda a API estar pronta (max 60s) ───────────────────────────────
+      # ── 6. Aguarda API (max 60s) ──────────────────────────────────────────────
       - name: Wait for API
         run: |
-          echo "Aguardando API responder em http://localhost:8000 ..."
+          echo "Aguardando API em http://localhost:8000 ..."
           for i in $(seq 1 12); do
             if curl -sf http://localhost:8000 > /dev/null 2>&1; then
               echo "✅ API respondeu na tentativa $i"
@@ -115,7 +111,7 @@ jobs:
           docker logs backend_ci
           exit 1
 
-      # ── 7. Smoke test - raiz ─────────────────────────────────────────────────
+      # ── 7. Smoke test raiz ────────────────────────────────────────────────────
       - name: Smoke test GET /
         run: |
           STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8000)
@@ -127,7 +123,7 @@ jobs:
           fi
           echo "✅ Raiz da API respondendo"
 
-      # ── 8. Smoke test - login com admin seed ─────────────────────────────────
+      # ── 8. Smoke test login ───────────────────────────────────────────────────
       - name: Smoke test POST /api/v1/auth/login
         run: |
           RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -138,8 +134,8 @@ jobs:
           BODY=$(echo "$RESPONSE" | head -n -1)
           STATUS=$(echo "$RESPONSE" | tail -n 1)
 
-          echo "HTTP status POST /auth/login: $STATUS"
-          echo "Response body: $BODY"
+          echo "HTTP status: $STATUS"
+          echo "Body: $BODY"
 
           if [ "$STATUS" != "200" ]; then
             echo "❌ Login falhou -- esperado 200, recebido $STATUS"
@@ -148,11 +144,11 @@ jobs:
           fi
 
           echo "$BODY" | grep -q "access_token" \
-            && echo "✅ Token JWT presente na resposta" \
-            || (echo "❌ access_token ausente na resposta" && exit 1)
+            && echo "✅ JWT presente na resposta" \
+            || (echo "❌ access_token ausente" && exit 1)
 
       # ── 9. Logs em caso de falha ──────────────────────────────────────────────
-      - name: Show container logs on failure
+      - name: Show logs on failure
         if: failure()
         run: docker logs backend_ci
 
