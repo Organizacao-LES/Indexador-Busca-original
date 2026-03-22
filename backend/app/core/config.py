@@ -4,12 +4,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_USER: str = "IFESDOC"
+    DATABASE_PASSWORD: str = "adminIfes"
+    DATABASE_HOST: str = "localhost"
+    DATABASE_PORT: str = "5433"
     SECRET_KEY: str = "super-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

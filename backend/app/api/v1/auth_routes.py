@@ -18,6 +18,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     identifier = request.login or request.email
+    print(f"Login attempt for indentifier: {identifier}")
     return AuthService.login(db, identifier, request.password)
 
 
