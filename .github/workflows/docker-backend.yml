@@ -40,11 +40,20 @@ jobs:
           --health-start-period 15s
 
     env:
-      DATABASE_URL: postgresql://IFESDOC:adminIfes@localhost:5433/ifesdoc
+      # ── Database (variaveis separadas igual ao .env) ───────────────────────
+      DATABASE_USER: IFESDOC
+      DATABASE_PASSWORD: adminIfes
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5433
+
+      # ── Security ───────────────────────────────────────────────────────────
       SECRET_KEY: ci_secret_key_nao_usar_em_prod
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
-      BACKEND_CORS_ORIGINS: '["http://localhost:8080"]'
+      BACKEND_CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
+
+      # ── Environment ────────────────────────────────────────────────────────
+      ENVIRONMENT: ci
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
@@ -55,22 +64,26 @@ jobs:
       - name: Apply database schema and seed
         run: |
           echo "Aplicando schema..."
-          PGPASSWORD=adminIfes psql \
-            -h localhost -p 5433 \
-            -U IFESDOC -d ifesdoc \
+          PGPASSWORD=$DATABASE_PASSWORD psql \
+            -h $DATABASE_HOST \
+            -p $DATABASE_PORT \
+            -U $DATABASE_USER \
+            -d ifesdoc \
             -f docker/postgres/init/01_schema.sql
 
           echo "Aplicando seed admin..."
-          PGPASSWORD=adminIfes psql \
-            -h localhost -p 5433 \
-            -U IFESDOC -d ifesdoc \
+          PGPASSWORD=$DATABASE_PASSWORD psql \
+            -h $DATABASE_HOST \
+            -p $DATABASE_PORT \
+            -U $DATABASE_USER \
+            -d ifesdoc \
             -f docker/postgres/init/02_admin.sql
 
       # ── 3. Buildx com cache GHA ───────────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 4. Build — context = backend/, igual ao seu build docker.cmd ─────────
+      # ── 4. Build — context = backend/ ────────────────────────────────────────
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
@@ -82,17 +95,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # ── 5. Run apontando para o postgres do servico ───────────────────────────
+      # ── 5. Run — passa variaveis separadas igual ao .env ─────────────────────
       - name: Run container
         run: |
           docker run -d \
             --name backend_ci \
             --network host \
-            -e DATABASE_URL="${DATABASE_URL}" \
+            -e DATABASE_USER="${DATABASE_USER}" \
+            -e DATABASE_PASSWORD="${DATABASE_PASSWORD}" \
+            -e DATABASE_HOST="${DATABASE_HOST}" \
+            -e DATABASE_PORT="${DATABASE_PORT}" \
             -e SECRET_KEY="${SECRET_KEY}" \
             -e ALGORITHM="${ALGORITHM}" \
             -e ACCESS_TOKEN_EXPIRE_MINUTES="${ACCESS_TOKEN_EXPIRE_MINUTES}" \
             -e BACKEND_CORS_ORIGINS="${BACKEND_CORS_ORIGINS}" \
+            -e ENVIRONMENT="${ENVIRONMENT}" \
             ifesdoc-backend:ci
 
       # ── 6. Aguarda API (max 60s) ──────────────────────────────────────────────
