@@ -1,12 +1,15 @@
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, constr
+
+from app.domain.user_role import UserRole
 
 
 class UserBase(BaseModel):
     nome: str = constr(min_length=1, max_length=255)
     login: str = constr(min_length=1, max_length=100)
     email: EmailStr
-    perfil: str = constr(min_length=1, max_length=50)
+    perfil: UserRole = UserRole.USER
     ativo: bool = True
 
 
@@ -18,7 +21,7 @@ class UserUpdate(BaseModel):
     nome: str | None = constr(min_length=1, max_length=255)
     login: str | None = constr(min_length=1, max_length=100)
     email: EmailStr | None = None
-    perfil: str | None = constr(min_length=1, max_length=50)
+    perfil: UserRole | None = None
     ativo: bool | None = None
     senha: str | None = constr(min_length=8)
 

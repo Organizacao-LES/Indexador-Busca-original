@@ -6,8 +6,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from starlette.requests import Request
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -20,7 +20,6 @@ async def lifespan(_: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
     except OperationalError:
-        # Permite subir a API mesmo se o banco ainda não estiver disponível.
         pass
     yield
 
@@ -42,7 +41,7 @@ app.include_router(api_router, prefix="/api/v1")
 async def http_exception_handler(_: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"message": f"[http_exception_handler] {exc.detail}"},
+        content={"message": exc.detail},
     )
 
 
