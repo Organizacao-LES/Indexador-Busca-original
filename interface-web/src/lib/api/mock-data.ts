@@ -12,13 +12,8 @@ import type {
   SessionUser,
   UserSummary,
 } from "@/types/app";
-import sanitizeHtml from "sanitize-html";
-
 const stripHtml = (input: string): string =>
-  sanitizeHtml(input, {
-    allowedTags: [],
-    allowedAttributes: {},
-  });
+  input.replace(/<[^>]+>/g, "");
 
 export const mockUsers: UserSummary[] = [
   { id: 1, name: "Carlos Silva", login: "admin", email: "admin@ifes.edu.br", role: "Administrador", active: true },
