@@ -8,14 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-
-const batchFiles = [
-  { name: "relatorio_2025.pdf", size: "2.4 MB", status: "indexed" as const },
-  { name: "edital_monitoria.pdf", size: "1.1 MB", status: "validated" as const },
-  { name: "ata_reuniao.txt", size: "45 KB", status: "indexed" as const },
-  { name: "planilha_notas.csv", size: "320 KB", status: "error" as const },
-  { name: "portaria_032.pdf", size: "890 KB", status: "validated" as const },
-];
+import { PageError, PageLoader } from "@/components/PageState";
+import { useIngestionBatch, useIngestionHistory } from "@/hooks/use-app-query";
 
 const statusMap = {
   validated: { label: "Validado", variant: "secondary" as const, color: "text-info" },
@@ -23,15 +17,9 @@ const statusMap = {
   error: { label: "Falha", variant: "destructive" as const, color: "text-destructive" },
 };
 
-const ingestionHistory = [
-  { date: "2025-08-12 14:32", file: "resolucao_45_2025.pdf", type: "Individual", result: "Sucesso", details: "Validado → Extraído → Indexado" },
-  { date: "2025-08-12 14:30", file: "edital_monitoria.pdf", type: "Individual", result: "Sucesso", details: "Validado → Extraído → Indexado" },
-  { date: "2025-08-11 16:42", file: "planilha_notas.csv", type: "Lote", result: "Falha", details: "Validação falhou: formato incompatível" },
-  { date: "2025-08-11 16:40", file: "ata_reuniao.txt", type: "Lote", result: "Sucesso", details: "Validado → Extraído → Indexado" },
-  { date: "2025-08-10 09:15", file: "portaria_032.pdf", type: "Individual", result: "Sucesso", details: "Validado → Extraído → Indexado" },
-];
-
 const IngestionPage = () => {
+  const batchQuery = useIngestionBatch();
+  const historyQuery = useIngestionHistory();
   const [dragOver, setDragOver] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [step, setStep] = useState<"idle" | "validating" | "validated" | "extracting" | "extracted" | "indexing" | "done">("idle");
@@ -72,6 +60,17 @@ const IngestionPage = () => {
     { key: "extract", label: "Extração", done: ["extracted", "indexing", "done"].includes(step) },
     { key: "index", label: "Indexação", done: step === "done" },
   ];
+
+  if (batchQuery.isLoading || historyQuery.isLoading) {
+    return <PageLoader label="Carregando dados de ingestão..." />;
+  }
+
+  if (batchQuery.isError || historyQuery.isError || !batchQuery.data || !historyQuery.data) {
+    return <PageError title="Falha ao carregar o módulo de ingestão." onRetry={() => {
+      batchQuery.refetch();
+      historyQuery.refetch();
+    }} />;
+  }
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -235,7 +234,7 @@ const IngestionPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {batchFiles.map((file, i) => (
+                {batchQuery.data.map((file, i) => (
                   <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="p-3 flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
@@ -278,7 +277,7 @@ const IngestionPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {ingestionHistory.map((item, i) => (
+            {historyQuery.data.map((item, i) => (
                   <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="p-3 text-muted-foreground font-mono text-xs whitespace-nowrap">{item.date}</td>
                     <td className="p-3 text-foreground flex items-center gap-2">

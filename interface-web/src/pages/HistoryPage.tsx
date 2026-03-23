@@ -4,19 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-
-const historyData = [
-  { date: "2025-08-12 14:32", user: "admin@ifes.edu.br", action: "Indexação", details: "resolucao_45_2025.pdf indexado com sucesso", status: "success" },
-  { date: "2025-08-12 14:30", user: "joao.oliveira@ifes.edu.br", action: "Busca", details: 'Consulta: "resolução normativa" — 5 resultados', status: "info" },
-  { date: "2025-08-12 13:15", user: "admin@ifes.edu.br", action: "Ingestão", details: "Upload de edital_monitoria.pdf (1.1 MB)", status: "success" },
-  { date: "2025-08-11 16:42", user: "admin@ifes.edu.br", action: "Falha de Indexação", details: "planilha_notas.csv — falha na indexação (UC11)", status: "error" },
-  { date: "2025-08-11 10:20", user: "maria.santos@ifes.edu.br", action: "Busca", details: 'Consulta: "edital 2025" — 3 resultados', status: "info" },
-  { date: "2025-08-10 09:05", user: "admin@ifes.edu.br", action: "Criação de Usuário", details: "Novo usuário maria.santos@ifes.edu.br criado (UC01)", status: "success" },
-  { date: "2025-08-10 09:04", user: "admin@ifes.edu.br", action: "Ação Administrativa", details: "Perfil de pedro.lima alterado para Administrador (UC03)", status: "success" },
-  { date: "2025-08-09 17:30", user: "admin@ifes.edu.br", action: "Ingestão", details: "Upload em lote: 5 arquivos processados (UC09)", status: "success" },
-  { date: "2025-08-09 11:00", user: "admin@ifes.edu.br", action: "Ação Administrativa", details: "Usuário ana.costa inativado (UC05)", status: "warning" },
-  { date: "2025-08-08 15:20", user: "admin@ifes.edu.br", action: "Reindexação", details: "Documento portaria_032.pdf reindexado (UC13)", status: "success" },
-];
+import { PageError, PageLoader } from "@/components/PageState";
+import { useHistory } from "@/hooks/use-app-query";
 
 const statusVariant: Record<string, "default" | "destructive" | "secondary"> = {
   success: "default",
@@ -31,6 +20,16 @@ const statusColors: Record<string, string> = {
 };
 
 const HistoryPage = () => {
+  const { data, isLoading, isError, refetch } = useHistory();
+
+  if (isLoading) {
+    return <PageLoader label="Carregando histórico..." />;
+  }
+
+  if (isError || !data) {
+    return <PageError title="Falha ao carregar histórico." onRetry={() => refetch()} />;
+  }
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -98,7 +97,7 @@ const HistoryPage = () => {
             </tr>
           </thead>
           <tbody>
-            {historyData.map((row, i) => (
+            {data.map((row, i) => (
               <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="p-3 text-muted-foreground font-mono text-xs whitespace-nowrap">{row.date}</td>
                 <td className="p-3 text-foreground">{row.user}</td>

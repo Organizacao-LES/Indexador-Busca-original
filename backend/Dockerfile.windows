@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1.4
+
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dependencias do sistema necessarias para psycopg2
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# requirements.txt esta dentro de backend/ junto com este Dockerfile
+# entao o COPY funciona direto — sem precisar de ../
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.pip \
+    pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copia o codigo da app — app/ esta dentro de backend/
+COPY app/ ./app/
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

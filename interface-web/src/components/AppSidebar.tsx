@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Search,
   FileUp,
@@ -10,6 +10,8 @@ import {
   LogOut,
   FileText,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { appEnv } from "@/lib/env";
 
 const navItems = [
   { title: "Busca", path: "/busca", icon: Search },
@@ -23,6 +25,13 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <aside className="w-64 min-h-screen bg-sidebar flex flex-col border-r border-sidebar-border shrink-0">
@@ -30,7 +39,7 @@ export function AppSidebar() {
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
         <FileText className="h-7 w-7 text-sidebar-primary mr-3" />
         <span className="text-xl font-bold text-sidebar-accent-foreground tracking-tight">
-          IFESDOC
+          {appEnv.appName}
         </span>
       </div>
 
@@ -53,13 +62,14 @@ export function AppSidebar() {
 
       {/* Logout */}
       <div className="p-3 border-t border-sidebar-border">
-        <NavLink
-          to="/login"
+        <button
+          type="button"
+          onClick={handleLogout}
           className="sidebar-link sidebar-link-inactive"
         >
           <LogOut className="h-4.5 w-4.5 shrink-0" />
           <span>Sair</span>
-        </NavLink>
+        </button>
       </div>
     </aside>
   );

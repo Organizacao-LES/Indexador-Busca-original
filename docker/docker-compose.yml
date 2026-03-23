@@ -1,20 +1,110 @@
 services:
-
   postgres:
     image: postgres:16
     container_name: ifesdoc_postgres
-
     environment:
       POSTGRES_DB: ifesdoc
       POSTGRES_USER: ifesdoc_user
       POSTGRES_PASSWORD: ifesdoc_pass
-
     ports:
       - "5433:5432"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ifesdoc_user -d ifesdoc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: ifesdoc_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ifesdoc_user:ifesdoc_pass@postgres:5432/ifesdoc
+      SECRET_KEY: change_this_secret
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      BACKEND_CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: interface-web/Dockerfile
+    container_name: ifesdoc_frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_APP_NAME: IFESDOC
+      VITE_API_URL: http://localhost:8000
+      VITE_USE_MOCK_API: "false"
+    ports:
+      - "8080:8080"
+
+  sonarqube_db:
+    image: postgres:16
+    container_name: ifesdoc_sonarqube_db
+    profiles: ["quality"]
+
+    environment:
+      POSTGRES_DB: sonarqube
+      POSTGRES_USER: sonarqube
+      POSTGRES_PASSWORD: sonarqube
+
+    ports:
+      - "5434:5432"
+
+    volumes:
+      - sonarqube_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonarqube -d sonarqube"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: ifesdoc_sonarqube
+    profiles: ["quality"]
+
+    depends_on:
+      sonarqube_db:
+        condition: service_healthy
+
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube_db:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonarqube
+      SONAR_JDBC_PASSWORD: sonarqube
+
+    ports:
+      - "9000:9000"
+
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/api/system/status"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+
 volumes:
   postgres_data:
+  sonarqube_postgres_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

@@ -1,26 +1,43 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FileText, Calendar, Tag, Eye, Download, SearchX, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-
-const mockResults = [
-  { id: 1, title: "Resolução Normativa nº 45/2025 - Normas Acadêmicas", snippet: "Estabelece as normas para o funcionamento dos cursos de graduação, incluindo <mark>resolução</mark> sobre matrículas e avaliações...", category: "Acadêmico", type: "PDF", date: "2025-08-12", relevance: 95 },
-  { id: 2, title: "Edital de Seleção 012/2025 - Programa de Monitoria", snippet: "O Instituto Federal do Espírito Santo torna público o <mark>edital</mark> para seleção de monitores para o semestre 2025/2...", category: "Acadêmico", type: "PDF", date: "2025-07-28", relevance: 88 },
-  { id: 3, title: "Relatório de Gestão 2024 - Campus Serra", snippet: "Apresenta os resultados alcançados no exercício de 2024, contemplando indicadores de <mark>gestão</mark> acadêmica e administrativa...", category: "Administrativo", type: "PDF", date: "2025-03-15", relevance: 76 },
-  { id: 4, title: "Plano de Desenvolvimento Institucional 2024-2028", snippet: "Define as diretrizes estratégicas e metas institucionais para o quinquênio, abordando <mark>plano</mark> de expansão e qualidade...", category: "Administrativo", type: "PDF", date: "2024-12-10", relevance: 72 },
-  { id: 5, title: "Portaria nº 234/2025 - Comissão de Avaliação", snippet: "Designa os membros da comissão responsável pela avaliação institucional do período letivo 2025/1...", category: "Administrativo", type: "TXT", date: "2025-06-01", relevance: 64 },
-];
+import { PageError, PageLoader } from "@/components/PageState";
+import { useSearchResults } from "@/hooks/use-app-query";
 
 const ResultsPage = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = 3;
+  const currentPage = Number(searchParams.get("page") || "1");
+  const filters = useMemo(() => ({
+    page: currentPage,
+    limit: Number(searchParams.get("limit") || "20"),
+  }), [currentPage, searchParams]);
+  const { data, isLoading, isError, refetch } = useSearchResults(query, filters);
 
-  const hasResults = query.toLowerCase() !== "xyz123";
+  const totalPages = data?.totalPages || 1;
+  const hasResults = !!data && data.items.length > 0;
+
+  const goToPage = (page: number) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("page", String(page));
+    setSearchParams(next);
+  };
+
+  if (!query.trim()) {
+    return <PageError title="Informe uma consulta para visualizar resultados." onRetry={() => navigate("/busca")} />;
+  }
+
+  if (isLoading) {
+    return <PageLoader label="Consultando documentos..." />;
+  }
+
+  if (isError || !data) {
+    return <PageError title="Falha ao carregar resultados da busca." onRetry={() => refetch()} />;
+  }
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -33,7 +50,7 @@ const ResultsPage = () => {
             <h1 className="text-xl font-semibold text-foreground">Resultados da busca</h1>
             <p className="text-sm text-muted-foreground">
               {hasResults ? (
-                <>{mockResults.length} documentos encontrados para "<span className="font-medium text-foreground">{query}</span>"</>
+                <>{data.total} documentos encontrados para "<span className="font-medium text-foreground">{query}</span>"</>
               ) : (
                 <>Nenhum resultado para "<span className="font-medium text-foreground">{query}</span>"</>
               )}
@@ -68,7 +85,7 @@ const ResultsPage = () => {
       ) : (
         <>
           <div className="space-y-3">
-            {mockResults.map((doc) => (
+            {data.items.map((doc) => (
               <div key={doc.id} className="glass-card p-5 hover:shadow-md transition-all duration-200">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -117,17 +134,17 @@ const ResultsPage = () => {
               variant="outline"
               size="sm"
               disabled={currentPage === 1}
-              onClick={() => setCurrentPage(currentPage - 1)}
+              onClick={() => goToPage(currentPage - 1)}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            {[1, 2, 3].map((page) => (
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
               <Button
                 key={page}
                 variant={page === currentPage ? "default" : "outline"}
                 size="sm"
                 className="w-9"
-                onClick={() => setCurrentPage(page)}
+                onClick={() => goToPage(page)}
               >
                 {page}
               </Button>
@@ -136,7 +153,7 @@ const ResultsPage = () => {
               variant="outline"
               size="sm"
               disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(currentPage + 1)}
+              onClick={() => goToPage(currentPage + 1)}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>

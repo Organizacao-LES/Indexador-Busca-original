@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useRecentSearches } from "@/hooks/use-app-query";
 
 const SearchPage = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const { data: recentSearches = [] } = useRecentSearches();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,9 +125,9 @@ const SearchPage = () => {
       <div className="mt-10">
         <h3 className="text-sm font-medium text-muted-foreground mb-3">Buscas recentes</h3>
         <div className="flex flex-wrap gap-2">
-          {["resolução normativa", "edital 2025", "relatório gestão", "plano pedagógico"].map((term) => (
+          {recentSearches.map(({ id, term }) => (
             <button
-              key={term}
+              key={id}
               onClick={() => { setQuery(term); navigate(`/resultados?q=${encodeURIComponent(term)}`); }}
               className="px-3 py-1.5 rounded-full text-sm bg-secondary text-secondary-foreground hover:bg-accent transition-colors"
             >
