@@ -77,6 +77,28 @@ export type IngestionHistoryEntry = {
   details: string;
 };
 
+export type DocumentUploadPayload = {
+  file: File;
+  category: string;
+  documentDate?: string;
+};
+
+export type UploadedDocument = {
+  id: number;
+  title: string;
+  fileName: string;
+  category: string;
+  type: string;
+  mimeType: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  date: string | null;
+  uploadedAt: string;
+  validated: boolean;
+  integrityOk: boolean;
+  hash: string;
+};
+
 export type IndexLogEntry = {
   time: string;
   message: string;
