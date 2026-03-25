@@ -5,7 +5,7 @@ echo LDA BUILDER DOCKER
 echo %computername%
 echo %username%
 echo %cd%
-echo DATABASE_URL=postgres://%DATABASE_USER%:%DATABASE_PASSWORD%@%DATABASE_HOST%:%DATABASE_PORT%/ifesdoc
+echo DATABASE_URL="postgres://%DATABASE_USER%:%DATABASE_PASSWORD%@%DATABASE_HOST%:%DATABASE_PORT%/ifesdoc"
 echo ==========================
 echo.
 
