@@ -39,9 +39,11 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(_: Request, exc: StarletteHTTPException):
+    first_error = exc.errors()[0] if exc.errors() else None
+    message = first_error.get("msg", "Dados inválidos.") if first_error else "Dados inválidos."
     return JSONResponse(
         status_code=exc.status_code,
-        content={"message": exc.detail},
+        content={"message": f"{message} - {exc.detail}"},
     )
 
 
