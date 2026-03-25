@@ -10,6 +10,20 @@ type RequestOptions = {
   query?: Record<string, string | number | undefined>;
 };
 
+const readStoredToken = () => {
+  const raw = localStorage.getItem("ifesdoc.session");
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const session = JSON.parse(raw) as { token?: string };
+    return session.token ?? null;
+  } catch {
+    return null;
+  }
+};
+
 const buildUrl = (path: string, query?: RequestOptions["query"]) => {
   const url = new URL(path, appEnv.apiBaseUrl);
 
@@ -35,14 +49,17 @@ export class ApiError extends Error {
 }
 
 export const apiRequest = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const token = options.token ?? readStoredToken();
+
   const response = await fetch(buildUrl(path, options.query), {
     method: options.method || "GET",
     headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: options.body ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
   });
 
   if (!response.ok) {

@@ -17,6 +17,7 @@ import { storageKeys } from "@/lib/storage";
 import type {
   AppSettings,
   DocumentDetails,
+  DocumentUploadPayload,
   HistoryEntry,
   IndexStatusSnapshot,
   IngestionBatchFile,
@@ -26,6 +27,7 @@ import type {
   SearchHistoryItem,
   SearchResponse,
   SessionUser,
+  UploadedDocument,
   UserSummary,
 } from "@/types/app";
 
@@ -140,6 +142,39 @@ export const userService = {
 };
 
 export const ingestionService = {
+  async uploadDocument(payload: DocumentUploadPayload): Promise<UploadedDocument> {
+    if (shouldUseMocks()) {
+      await delay(500);
+      return {
+        id: Date.now(),
+        title: payload.file.name.replace(/\.[^.]+$/, ""),
+        fileName: payload.file.name,
+        category: payload.category,
+        type: payload.file.name.split(".").pop()?.toUpperCase() || "TXT",
+        mimeType: payload.file.type || "application/octet-stream",
+        sizeBytes: payload.file.size,
+        sizeLabel: `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`,
+        date: payload.documentDate || null,
+        uploadedAt: new Date().toISOString(),
+        validated: true,
+        integrityOk: true,
+        hash: "mock-hash",
+      };
+    }
+
+    const formData = new FormData();
+    formData.append("file", payload.file);
+    formData.append("category", payload.category);
+    if (payload.documentDate) {
+      formData.append("document_date", payload.documentDate);
+    }
+
+    return apiRequest<UploadedDocument>("/api/v1/ingestion/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   async batchFiles(): Promise<IngestionBatchFile[]> {
     if (shouldUseMocks()) {
       await delay(150);

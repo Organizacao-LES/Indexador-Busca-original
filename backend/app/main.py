@@ -12,6 +12,12 @@ from starlette.requests import Request
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.domain.document_category import DocumentCategory
+from app.domain.document_history import DocumentHistory
+from app.domain.ingestion_history import IngestionHistory
+from app.domain.ingestion_status import IngestionStatus
+from app.domain.invalid_document import InvalidDocument
+from app.domain.document import Document
 from app.domain.user import User
 
 
