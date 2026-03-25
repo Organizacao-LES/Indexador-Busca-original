@@ -17,6 +17,8 @@ class DocumentUploadResponse(BaseModel):
     validated: bool
     integrityOk: bool
     hash: str
+    extracted: bool
+    extractedCharacters: int
 
 
 class DocumentDetailsResponse(BaseModel):
@@ -33,6 +35,7 @@ class DocumentDetailsResponse(BaseModel):
     size: str
     downloadUrl: str | None = None
     content: str
+    extractedCharacters: int
 
 
 class IngestionBatchFileResponse(BaseModel):

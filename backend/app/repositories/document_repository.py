@@ -70,7 +70,7 @@ class DocumentRepository:
 
     @staticmethod
     def _row_to_payload(row) -> dict:
-        file_name = Path(row.file_path).name
+        file_name = f"{row.title}.{str(row.type).lower()}"
         return {
             "id": row.id,
             "title": row.title,

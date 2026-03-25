@@ -14,7 +14,7 @@ RUN apt-get update \
 
 # requirements.txt esta dentro de backend/ junto com este Dockerfile
 # entao o COPY funciona direto — sem precisar de ../
-COPY requirements.txt .
+COPY backend/requirements.txt ./requirements.txt
 RUN --mount=type=cache,target=/root/.pip \
     pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
