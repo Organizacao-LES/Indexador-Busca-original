@@ -9,6 +9,9 @@ echo ==========================
 echo.
 
 docker build -f Dockerfile.windows -t backend .
-docker run -d -p 8000:8000 --name backend_%computername% backend
+docker run -d -p 8000:8000 ^
+--name backend_%computername% ^
+-e DATABASE_URL=postgres://%DATABASE_USER%:%DATABASE_PASSWORD%@192.168.6.100:%DATABASE_PORT%/meubanco ^
+backend
 docker ps
 timeout 10
