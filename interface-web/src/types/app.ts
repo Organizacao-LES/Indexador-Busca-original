@@ -61,6 +61,7 @@ export type DocumentDetails = {
   size: string;
   downloadUrl?: string;
   content: string;
+  extractedCharacters: number;
 };
 
 export type IngestionBatchFile = {
@@ -75,6 +76,30 @@ export type IngestionHistoryEntry = {
   type: string;
   result: string;
   details: string;
+};
+
+export type DocumentUploadPayload = {
+  file: File;
+  category: string;
+  documentDate?: string;
+};
+
+export type UploadedDocument = {
+  id: number;
+  title: string;
+  fileName: string;
+  category: string;
+  type: string;
+  mimeType: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  date: string | null;
+  uploadedAt: string;
+  validated: boolean;
+  integrityOk: boolean;
+  hash: string;
+  extracted: boolean;
+  extractedCharacters: number;
 };
 
 export type IndexLogEntry = {

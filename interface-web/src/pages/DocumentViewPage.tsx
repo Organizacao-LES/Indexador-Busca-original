@@ -97,6 +97,10 @@ const DocumentViewPage = () => {
               <Clock className="h-3.5 w-3.5" />
               Indexado em {document.indexedAt}
             </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              {document.extractedCharacters} caracteres extraídos
+            </div>
           </div>
         </div>
 

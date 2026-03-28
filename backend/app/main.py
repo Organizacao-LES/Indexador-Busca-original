@@ -6,12 +6,18 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from starlette.requests import Request
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.domain.document_category import DocumentCategory
+from app.domain.document_history import DocumentHistory
+from app.domain.ingestion_history import IngestionHistory
+from app.domain.ingestion_status import IngestionStatus
+from app.domain.invalid_document import InvalidDocument
+from app.domain.document import Document
 from app.domain.user import User
 
 
@@ -20,7 +26,6 @@ async def lifespan(_: FastAPI):
     try:
         Base.metadata.create_all(bind=engine)
     except OperationalError:
-        # Permite subir a API mesmo se o banco ainda não estiver disponível.
         pass
     yield
 

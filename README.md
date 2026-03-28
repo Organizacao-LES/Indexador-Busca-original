@@ -171,6 +171,10 @@ Os principais documentos do projeto estao em `docs/`:
 
 ## Status do Projeto
 
+[![Docker Frontend](https://github.com/Organizacao-LES/Indexador-Busca-original/actions/workflows/docker-frontend.yml/badge.svg)](https://github.com/Organizacao-LES/Indexador-Busca-original/actions/workflows/docker-frontend.yml)
+
+[![Docker Backend](https://github.com/Organizacao-LES/Indexador-Busca-original/actions/workflows/docker-backend.yml/badge.svg?branch=develop)](https://github.com/Organizacao-LES/Indexador-Busca-original/actions/workflows/docker-backend.yml)
+
 O repositorio ja apresenta a estrutura base do backend, frontend e organizacao modular da aplicacao. Parte da arquitetura esta documentada e preparada para implementacao incremental, com foco em consolidar a API, a camada de indexacao e os fluxos de busca documental.
 
 ## Principio Norteador
