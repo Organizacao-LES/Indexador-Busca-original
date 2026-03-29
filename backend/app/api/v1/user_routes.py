@@ -28,6 +28,10 @@ def create_user(user_create: UserCreate, db: Session = Depends(get_db)):
     dependencies=[Depends(require_roles(UserRole.ADMIN))],
 )
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    print(f"Admin user is retrieving users with skip={skip} and limit={limit}.")
+    """
+    Retrieve all users. (Admin only)
+    """
     return user_service.get_all_users(db, skip, limit)
 
 
