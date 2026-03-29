@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     DOCUMENT_UPLOAD_DIR: str = "backend/storage/documents"
     DOCUMENT_MAX_FILE_SIZE_MB: int = 50
-    DOCUMENT_ALLOWED_EXTENSIONS: list[str] = ["pdf", "txt", "csv"]
+    DOCUMENT_ALLOWED_EXTENSIONS: list[str] = ["pdf", "docx", "txt", "csv"]
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",

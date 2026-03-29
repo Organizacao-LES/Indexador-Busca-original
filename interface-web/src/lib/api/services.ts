@@ -159,6 +159,8 @@ export const ingestionService = {
         validated: true,
         integrityOk: true,
         hash: "mock-hash",
+        extracted: true,
+        extractedCharacters: 1200,
       };
     }
 

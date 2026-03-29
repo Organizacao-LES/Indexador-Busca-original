@@ -43,7 +43,7 @@ const IngestionPage = () => {
       ]);
       toast({
         title: "Documento enviado",
-        description: "Upload concluído, arquivo validado e metadados registrados.",
+        description: "Upload concluído, arquivo validado, texto extraído e metadados registrados.",
       });
     },
     onError: (error: Error) => {
@@ -96,6 +96,7 @@ const IngestionPage = () => {
   const stepLabels = [
     { key: "upload", label: "Upload", done: uploaded },
     { key: "validate", label: "Validação", done: ["validated", "uploading", "done"].includes(step) },
+    { key: "extract", label: "Extração", done: step === "done" },
     { key: "store", label: "Armazenamento", done: step === "done" },
     { key: "register", label: "Registro", done: step === "done" },
   ];
@@ -160,7 +161,7 @@ const IngestionPage = () => {
             <input
               ref={inputRef}
               type="file"
-              accept=".pdf,.txt,.csv"
+              accept=".pdf,.docx,.txt,.csv"
               className="hidden"
               onChange={(e) => handleFileSelection(e.target.files?.[0] ?? null)}
             />
@@ -179,7 +180,7 @@ const IngestionPage = () => {
               <div className="flex flex-col items-center gap-2">
                 <Upload className="h-10 w-10 text-muted-foreground" />
                 <p className="font-medium text-foreground">Arraste o arquivo aqui ou clique para selecionar</p>
-                <p className="text-sm text-muted-foreground">Formatos aceitos: PDF, TXT, CSV (máx. 50MB)</p>
+                <p className="text-sm text-muted-foreground">Formatos aceitos: PDF, DOCX, TXT, CSV (máx. 50MB)</p>
               </div>
             )}
           </div>
@@ -217,7 +218,7 @@ const IngestionPage = () => {
               <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
               <div>
                 <p className="text-sm font-medium text-foreground">Arquivo pronto para envio</p>
-                <p className="text-xs text-muted-foreground">O backend vai validar tipo, tamanho e integridade antes de armazenar.</p>
+                <p className="text-xs text-muted-foreground">O backend vai validar tipo, tamanho, integridade e então extrair o conteúdo textual.</p>
               </div>
             </div>
           )}
@@ -227,7 +228,10 @@ const IngestionPage = () => {
               <div>
                 <p className="text-sm font-medium text-foreground">Ingestão concluída com sucesso</p>
                 <p className="text-xs text-muted-foreground">
-                  {uploadedDocument?.fileName} armazenado com validação concluída e metadados registrados.
+                  {uploadedDocument?.fileName} armazenado com validação concluída, texto extraído e metadados registrados.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {uploadedDocument?.extractedCharacters ?? 0} caracteres extraídos para processamento e indexação.
                 </p>
               </div>
             </div>
@@ -240,7 +244,7 @@ const IngestionPage = () => {
           >
             <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
             <p className="font-medium text-foreground">Arraste múltiplos arquivos ou clique para selecionar</p>
-            <p className="text-sm text-muted-foreground">Formatos aceitos: PDF, TXT, CSV</p>
+            <p className="text-sm text-muted-foreground">Formatos aceitos: PDF, DOCX, TXT, CSV</p>
           </div>
 
           <div className="glass-card p-4">
