@@ -8,8 +8,6 @@ from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
 
-import pdfplumber
-from docx import Document as DocxDocument
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
@@ -102,6 +100,75 @@ class DocumentService:
         db.commit()
 
         return self.get_document_payload(db, document.cod_documento)
+
+    def upload_documents_batch(
+        self,
+        db: Session,
+        *,
+        files: list[UploadFile],
+        category: str,
+        uploaded_by: User,
+        document_date: date | None = None,
+    ) -> dict:
+        items: list[dict] = []
+        success_count = 0
+
+        for file in files:
+            try:
+                payload = self.upload_document(
+                    db,
+                    file=file,
+                    category=category,
+                    uploaded_by=uploaded_by,
+                    document_date=document_date,
+                )
+                items.append(
+                    {
+                        "fileName": payload["file_name"],
+                        "status": "indexed",
+                        "message": "Documento validado, extraído e armazenado com sucesso.",
+                        "documentId": payload["id"],
+                        "extractedCharacters": len(payload["content"] or ""),
+                        "sizeLabel": self._format_size(payload["size_bytes"]),
+                    }
+                )
+                success_count += 1
+            except DocumentValidationException as exc:
+                items.append(
+                    {
+                        "fileName": file.filename or "arquivo-sem-nome",
+                        "status": "error",
+                        "message": exc.detail,
+                        "documentId": None,
+                        "extractedCharacters": 0,
+                        "sizeLabel": None,
+                    }
+                )
+            except Exception as exc:
+                self._register_invalid_document(
+                    db,
+                    uploaded_by,
+                    file.filename or "arquivo-sem-nome",
+                    "Falha inesperada no processamento em lote.",
+                )
+                items.append(
+                    {
+                        "fileName": file.filename or "arquivo-sem-nome",
+                        "status": "error",
+                        "message": "Falha inesperada no processamento do arquivo.",
+                        "documentId": None,
+                        "extractedCharacters": 0,
+                        "sizeLabel": None,
+                    }
+                )
+
+        total_files = len(files)
+        return {
+            "totalFiles": total_files,
+            "successCount": success_count,
+            "failureCount": total_files - success_count,
+            "items": items,
+        }
 
     def get_document_payload(self, db: Session, document_id: int) -> dict:
         payload = self.document_repository.get_document_payload(db, document_id)
@@ -302,11 +369,17 @@ class DocumentService:
 
     def _extract_pdf_text(self, content: bytes) -> str:
         try:
+            import pdfplumber
+
             with pdfplumber.open(io.BytesIO(content)) as pdf:
                 pages = [
                     (page.extract_text() or "").strip()
                     for page in pdf.pages
                 ]
+        except ModuleNotFoundError as exc:
+            raise DocumentValidationException(
+                "Extração de PDF indisponível: dependência pdfplumber não instalada."
+            ) from exc
         except Exception as exc:
             raise DocumentValidationException("Falha ao extrair texto do PDF.") from exc
 
@@ -317,7 +390,13 @@ class DocumentService:
 
     def _extract_docx_text(self, content: bytes) -> str:
         try:
+            from docx import Document as DocxDocument
+
             document = DocxDocument(io.BytesIO(content))
+        except ModuleNotFoundError as exc:
+            raise DocumentValidationException(
+                "Extração de DOCX indisponível: dependência python-docx não instalada."
+            ) from exc
         except Exception as exc:
             raise DocumentValidationException("Falha ao extrair texto do DOCX.") from exc
 

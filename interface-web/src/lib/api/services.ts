@@ -16,6 +16,8 @@ import { appEnv } from "@/lib/env";
 import { storageKeys } from "@/lib/storage";
 import type {
   AppSettings,
+  BatchUploadPayload,
+  BatchUploadResult,
   DocumentDetails,
   DocumentUploadPayload,
   HistoryEntry,
@@ -193,6 +195,37 @@ export const ingestionService = {
     }
 
     return apiRequest<IngestionHistoryEntry[]>("/api/v1/ingestion/history");
+  },
+
+  async uploadBatch(payload: BatchUploadPayload): Promise<BatchUploadResult> {
+    if (shouldUseMocks()) {
+      await delay(700);
+      return {
+        totalFiles: payload.files.length,
+        successCount: payload.files.length,
+        failureCount: 0,
+        items: payload.files.map((file, index) => ({
+          fileName: file.name,
+          status: "indexed",
+          message: "Documento validado, extraído e armazenado com sucesso.",
+          documentId: Date.now() + index,
+          extractedCharacters: 1200,
+          sizeLabel: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        })),
+      };
+    }
+
+    const formData = new FormData();
+    payload.files.forEach((file) => formData.append("files", file));
+    formData.append("category", payload.category);
+    if (payload.documentDate) {
+      formData.append("document_date", payload.documentDate);
+    }
+
+    return apiRequest<BatchUploadResult>("/api/v1/ingestion/upload-batch", {
+      method: "POST",
+      body: formData,
+    });
   },
 };
 

@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageError, PageLoader } from "@/components/PageState";
 import { useIngestionBatch, useIngestionHistory } from "@/hooks/use-app-query";
 import { ingestionService } from "@/lib/api/services";
-import type { UploadedDocument } from "@/types/app";
+import type { BatchUploadResult, UploadedDocument } from "@/types/app";
 
 const statusMap = {
   validated: { label: "Validado", variant: "secondary" as const, color: "text-info" },
@@ -25,11 +25,17 @@ const IngestionPage = () => {
   const historyQuery = useIngestionHistory();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const batchInputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [batchDragOver, setBatchDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [category, setCategory] = useState("");
+  const [batchCategory, setBatchCategory] = useState("");
   const [documentDate, setDocumentDate] = useState("");
+  const [batchDocumentDate, setBatchDocumentDate] = useState("");
   const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
+  const [batchResult, setBatchResult] = useState<BatchUploadResult | null>(null);
   const [step, setStep] = useState<"idle" | "uploading" | "validated" | "done">("idle");
   const { toast } = useToast();
   const uploadMutation = useMutation({
@@ -55,6 +61,27 @@ const IngestionPage = () => {
       });
     },
   });
+  const batchUploadMutation = useMutation({
+    mutationFn: ingestionService.uploadBatch,
+    onSuccess: async (result) => {
+      setBatchResult(result);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ingestion-batch"] }),
+        queryClient.invalidateQueries({ queryKey: ["ingestion-history"] }),
+      ]);
+      toast({
+        title: "Lote processado",
+        description: `${result.successCount} arquivo(s) com sucesso, ${result.failureCount} falha(s).`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Falha no upload em lote",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const uploaded = !!selectedFile;
 
@@ -62,6 +89,12 @@ const IngestionPage = () => {
     setSelectedFile(file);
     setUploadedDocument(null);
     setStep(file ? "validated" : "idle");
+  };
+
+  const handleBatchFileSelection = (files: FileList | File[] | null) => {
+    const normalizedFiles = files ? Array.from(files) : [];
+    setBatchFiles(normalizedFiles);
+    setBatchResult(null);
   };
 
   const handleSubmitUpload = () => {
@@ -90,6 +123,33 @@ const IngestionPage = () => {
     setStep("idle");
     if (inputRef.current) {
       inputRef.current.value = "";
+    }
+  };
+
+  const handleSubmitBatchUpload = () => {
+    if (batchFiles.length === 0 || !batchCategory) {
+      toast({
+        title: "Dados incompletos",
+        description: "Selecione os arquivos e informe a categoria para o lote.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    batchUploadMutation.mutate({
+      files: batchFiles,
+      category: batchCategory,
+      documentDate: batchDocumentDate || undefined,
+    });
+  };
+
+  const resetBatchUpload = () => {
+    setBatchFiles([]);
+    setBatchCategory("");
+    setBatchDocumentDate("");
+    setBatchResult(null);
+    if (batchInputRef.current) {
+      batchInputRef.current.value = "";
     }
   };
 
@@ -240,20 +300,74 @@ const IngestionPage = () => {
 
         <TabsContent value="batch" className="mt-4 space-y-4">
           <div
-            className="border-2 border-dashed rounded-xl p-10 text-center border-border cursor-pointer hover:border-primary/50 transition-all duration-200"
+            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 ${
+              batchDragOver ? "border-primary bg-accent" : batchFiles.length > 0 ? "border-success bg-success/5" : "border-border hover:border-primary/50"
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setBatchDragOver(true); }}
+            onDragLeave={() => setBatchDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setBatchDragOver(false);
+              handleBatchFileSelection(e.dataTransfer.files);
+            }}
+            onClick={() => batchInputRef.current?.click()}
           >
+            <input
+              ref={batchInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.docx,.txt,.csv"
+              className="hidden"
+              onChange={(e) => handleBatchFileSelection(e.target.files)}
+            />
             <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-            <p className="font-medium text-foreground">Arraste múltiplos arquivos ou clique para selecionar</p>
+            <p className="font-medium text-foreground">
+              {batchFiles.length > 0 ? `${batchFiles.length} arquivo(s) selecionado(s)` : "Arraste múltiplos arquivos ou clique para selecionar"}
+            </p>
             <p className="text-sm text-muted-foreground">Formatos aceitos: PDF, DOCX, TXT, CSV</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Categoria do lote</Label>
+              <Select value={batchCategory} onValueChange={setBatchCategory}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="academico">Acadêmico</SelectItem>
+                  <SelectItem value="administrativo">Administrativo</SelectItem>
+                  <SelectItem value="pesquisa">Pesquisa</SelectItem>
+                  <SelectItem value="extensao">Extensão</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data dos documentos</Label>
+              <Input type="date" value={batchDocumentDate} onChange={(e) => setBatchDocumentDate(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={handleSubmitBatchUpload} disabled={batchFiles.length === 0 || !batchCategory || batchUploadMutation.isPending}>
+              {batchUploadMutation.isPending ? "Processando lote..." : "Enviar lote"}
+            </Button>
+            <Button variant="outline" onClick={resetBatchUpload} disabled={batchFiles.length === 0 && !batchResult}>
+              Limpar lote
+            </Button>
           </div>
 
           <div className="glass-card p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium text-foreground">Progresso geral (UC09)</span>
-              <span className="text-sm text-muted-foreground">68%</span>
+              <span className="text-sm text-muted-foreground">
+                {batchResult ? `${Math.round((batchResult.successCount + batchResult.failureCount) / Math.max(batchResult.totalFiles, 1) * 100)}%` : "0%"}
+              </span>
             </div>
-            <Progress value={68} className="h-2" />
-            <p className="text-xs text-muted-foreground mt-2">3 de 5 documentos processados. Falhas são registradas individualmente.</p>
+            <Progress value={batchResult ? ((batchResult.successCount + batchResult.failureCount) / Math.max(batchResult.totalFiles, 1)) * 100 : 0} className="h-2" />
+            <p className="text-xs text-muted-foreground mt-2">
+              {batchResult
+                ? `${batchResult.successCount + batchResult.failureCount} de ${batchResult.totalFiles} documentos processados.`
+                : "Selecione os arquivos e envie o lote para processar."}
+            </p>
           </div>
 
           <div className="glass-card overflow-hidden">
@@ -267,13 +381,18 @@ const IngestionPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {batchQuery.data.map((file, i) => (
+                {(batchResult?.items ?? batchQuery.data.map((file) => ({
+                  fileName: file.name,
+                  status: file.status,
+                  sizeLabel: file.size,
+                  message: "",
+                }))).map((file, i) => (
                   <tr key={i} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="p-3 flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
-                      {file.name}
+                      {file.fileName}
                     </td>
-                    <td className="p-3 text-muted-foreground">{file.size}</td>
+                    <td className="p-3 text-muted-foreground">{file.sizeLabel ?? "-"}</td>
                     <td className="p-3">
                       <Badge variant={statusMap[file.status].variant}>
                         {statusMap[file.status].label}
@@ -281,9 +400,7 @@ const IngestionPage = () => {
                     </td>
                     <td className="p-3 text-right">
                       {file.status === "error" && (
-                        <Button variant="ghost" size="sm" className="text-destructive">
-                          Reprocessar
-                        </Button>
+                        <span className="text-xs text-destructive">{file.message || "Falha no processamento"}</span>
                       )}
                     </td>
                   </tr>
