@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import csv
-import io
 import time
-import zipfile
 from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +8,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
+from app.adapters.document_adapter_registry import document_adapter_registry
 from app.core.config import settings
 from app.domain.document import Document
 from app.domain.document_category import DocumentCategory
@@ -19,13 +17,17 @@ from app.domain.ingestion_history import IngestionHistory
 from app.domain.ingestion_status import IngestionStatus
 from app.domain.invalid_document import InvalidDocument
 from app.domain.user import User
-from app.exceptions.document_exceptions import DocumentNotFoundException, DocumentValidationException
+from app.exceptions.document_exceptions import (
+    DocumentNotFoundException,
+    DocumentValidationException,
+)
 from app.repositories.document_repository import DocumentRepository
 
 
 class DocumentService:
     def __init__(self, document_repository: DocumentRepository):
         self.document_repository = document_repository
+        self.adapter_registry = document_adapter_registry
         self.allowed_extensions = {
             extension.lower() for extension in settings.DOCUMENT_ALLOWED_EXTENSIONS
         }
@@ -48,13 +50,14 @@ class DocumentService:
         try:
             extension = self._extract_extension(filename)
             self._validate_extension(extension)
+            adapter = self.adapter_registry.get(extension)
             if not normalized_category:
                 raise DocumentValidationException("Informe uma categoria válida para o documento.")
 
             content = file.file.read()
             self._validate_size(content)
-            self._validate_integrity(extension, content)
-            extracted_content = self._extract_text(extension, content)
+            adapter.validate_integrity(content)
+            extracted_content = adapter.extract_text(content)
         except DocumentValidationException as exc:
             self._register_invalid_document(db, uploaded_by, filename, exc.detail)
             raise
@@ -144,7 +147,7 @@ class DocumentService:
                         "sizeLabel": None,
                     }
                 )
-            except Exception as exc:
+            except Exception:
                 self._register_invalid_document(
                     db,
                     uploaded_by,
@@ -191,7 +194,7 @@ class DocumentService:
             "fileName": payload["file_name"],
             "category": payload["category"],
             "type": payload["type"],
-            "mimeType": self._guess_mime_type(payload["type"].lower()),
+            "mimeType": self._get_mime_type(payload["type"].lower()),
             "sizeBytes": payload["size_bytes"],
             "sizeLabel": self._format_size(payload["size_bytes"]),
             "date": document_date,
@@ -250,9 +253,7 @@ class DocumentService:
             "extractedCharacters": extracted_characters,
         }
 
-    def _get_or_create_category(
-        self, db: Session, category_name: str
-    ) -> DocumentCategory:
+    def _get_or_create_category(self, db: Session, category_name: str) -> DocumentCategory:
         category = (
             db.query(DocumentCategory)
             .filter(DocumentCategory.nome_categoria.ilike(category_name))
@@ -266,9 +267,7 @@ class DocumentService:
         db.flush()
         return category
 
-    def _get_or_create_status(
-        self, db: Session, status_name: str
-    ) -> IngestionStatus:
+    def _get_or_create_status(self, db: Session, status_name: str) -> IngestionStatus:
         status = (
             db.query(IngestionStatus)
             .filter(IngestionStatus.estado_ingestao == status_name)
@@ -319,114 +318,6 @@ class DocumentService:
                 f"Arquivo excede o tamanho máximo permitido de {settings.DOCUMENT_MAX_FILE_SIZE_MB} MB."
             )
 
-    def _validate_integrity(self, extension: str, content: bytes) -> None:
-        if extension == "pdf":
-            if not content.startswith(b"%PDF"):
-                raise DocumentValidationException("PDF inválido: cabeçalho não reconhecido.")
-            if b"%%EOF" not in content[-2048:]:
-                raise DocumentValidationException("PDF inválido: final do arquivo corrompido.")
-            return
-
-        if extension == "docx":
-            try:
-                with zipfile.ZipFile(io.BytesIO(content)) as docx_file:
-                    if "word/document.xml" not in docx_file.namelist():
-                        raise DocumentValidationException(
-                            "DOCX inválido: estrutura do documento não reconhecida."
-                        )
-            except zipfile.BadZipFile as exc:
-                raise DocumentValidationException("DOCX inválido: arquivo corrompido.") from exc
-            return
-
-        if extension in {"txt", "csv"}:
-            try:
-                decoded = content.decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise DocumentValidationException(
-                    "Arquivo de texto inválido: codificação UTF-8 obrigatória."
-                ) from exc
-
-            if extension == "csv":
-                try:
-                    rows = list(csv.reader(decoded.splitlines()))
-                except csv.Error as exc:
-                    raise DocumentValidationException(
-                        "CSV inválido: estrutura inconsistente."
-                    ) from exc
-                if not rows:
-                    raise DocumentValidationException("CSV inválido: arquivo sem registros.")
-
-    def _extract_text(self, extension: str, content: bytes) -> str:
-        if extension == "pdf":
-            return self._extract_pdf_text(content)
-        if extension == "docx":
-            return self._extract_docx_text(content)
-        if extension == "csv":
-            return self._extract_csv_text(content)
-        if extension == "txt":
-            return self._extract_plain_text(content)
-        raise DocumentValidationException("Não há extrator configurado para esse tipo de arquivo.")
-
-    def _extract_pdf_text(self, content: bytes) -> str:
-        try:
-            import pdfplumber
-
-            with pdfplumber.open(io.BytesIO(content)) as pdf:
-                pages = [
-                    (page.extract_text() or "").strip()
-                    for page in pdf.pages
-                ]
-        except ModuleNotFoundError as exc:
-            raise DocumentValidationException(
-                "Extração de PDF indisponível: dependência pdfplumber não instalada."
-            ) from exc
-        except Exception as exc:
-            raise DocumentValidationException("Falha ao extrair texto do PDF.") from exc
-
-        extracted_text = "\n\n".join(page for page in pages if page).strip()
-        if not extracted_text:
-            raise DocumentValidationException("PDF válido, mas sem texto extraível.")
-        return extracted_text[:200000]
-
-    def _extract_docx_text(self, content: bytes) -> str:
-        try:
-            from docx import Document as DocxDocument
-
-            document = DocxDocument(io.BytesIO(content))
-        except ModuleNotFoundError as exc:
-            raise DocumentValidationException(
-                "Extração de DOCX indisponível: dependência python-docx não instalada."
-            ) from exc
-        except Exception as exc:
-            raise DocumentValidationException("Falha ao extrair texto do DOCX.") from exc
-
-        paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
-        extracted_text = "\n".join(paragraphs).strip()
-        if not extracted_text:
-            raise DocumentValidationException("DOCX válido, mas sem texto extraível.")
-        return extracted_text[:200000]
-
-    def _extract_plain_text(self, content: bytes) -> str:
-        try:
-            extracted_text = content.decode("utf-8").strip()
-        except UnicodeDecodeError as exc:
-            raise DocumentValidationException(
-                "Arquivo de texto inválido: codificação UTF-8 obrigatória."
-            ) from exc
-
-        if not extracted_text:
-            raise DocumentValidationException("TXT válido, mas sem conteúdo textual.")
-        return extracted_text[:200000]
-
-    def _extract_csv_text(self, content: bytes) -> str:
-        decoded = self._extract_plain_text(content)
-        rows = list(csv.reader(decoded.splitlines()))
-        flattened_rows = [", ".join(cell.strip() for cell in row if cell.strip()) for row in rows]
-        extracted_text = "\n".join(row for row in flattened_rows if row).strip()
-        if not extracted_text:
-            raise DocumentValidationException("CSV válido, mas sem conteúdo textual.")
-        return extracted_text[:200000]
-
     def _store_file(self, content: bytes, extension: str) -> Path:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         target = self.storage_dir / f"{uuid4().hex}.{extension}"
@@ -440,14 +331,8 @@ class DocumentService:
             return f"{size_bytes / 1024:.1f} KB"
         return f"{size_bytes / (1024 * 1024):.1f} MB"
 
-    def _guess_mime_type(self, extension: str) -> str:
-        if extension == "pdf":
-            return "application/pdf"
-        if extension == "docx":
-            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        if extension == "csv":
-            return "text/csv"
-        return "text/plain"
+    def _get_mime_type(self, extension: str) -> str:
+        return self.adapter_registry.get(extension).mime_type
 
 
 document_service = DocumentService(DocumentRepository())
