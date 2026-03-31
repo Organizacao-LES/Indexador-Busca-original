@@ -14,19 +14,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { appEnv } from "@/lib/env";
 
 const navItems = [
-  { title: "Busca", path: "/busca", icon: Search },
-  { title: "Ingestão", path: "/ingestao", icon: FileUp },
-  { title: "Indexação", path: "/indexacao", icon: Database },
-  { title: "Métricas", path: "/metricas", icon: BarChart3 },
-  { title: "Histórico", path: "/historico", icon: Clock },
-  { title: "Gestão de Usuários", path: "/usuarios", icon: Users },
-  { title: "Configurações", path: "/configuracoes", icon: Settings },
+  { title: "Busca", path: "/busca", icon: Search, adminOnly: false },
+  { title: "Ingestão", path: "/ingestao", icon: FileUp, adminOnly: true },
+  { title: "Indexação", path: "/indexacao", icon: Database, adminOnly: true },
+  { title: "Métricas", path: "/metricas", icon: BarChart3, adminOnly: true },
+  { title: "Histórico", path: "/historico", icon: Clock, adminOnly: false },
+  { title: "Gestão de Usuários", path: "/usuarios", icon: Users, adminOnly: true },
+  { title: "Configurações", path: "/configuracoes", icon: Settings, adminOnly: false },
 ];
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -45,7 +45,7 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1">
-        {navItems.map((item) => {
+        {navItems.filter((item) => !item.adminOnly || isAdmin).map((item) => {
           const isActive = location.pathname.startsWith(item.path);
           return (
             <NavLink

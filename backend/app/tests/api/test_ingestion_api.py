@@ -111,7 +111,7 @@ def test_upload_document_rejects_invalid_extension(client: TestClient):
     )
 
     assert response.status_code == 400
-    assert response.json()["message"] == "Tipo de arquivo inválido. Formatos aceitos: CSV, PDF, TXT."
+    assert response.json()["message"] == "Tipo de arquivo inválido. Formatos aceitos: CSV, DOCX, PDF, TXT."
 
 
 def test_ingestion_history_lists_uploaded_document(client: TestClient):
@@ -134,3 +134,24 @@ def test_ingestion_history_lists_uploaded_document(client: TestClient):
     assert len(payload) == 1
     assert payload[0]["file"] == "ata.csv"
     assert payload[0]["result"] == "Sucesso"
+
+
+def test_batch_upload_processes_multiple_files(client: TestClient):
+    token = login(client)
+
+    response = client.post(
+        "/api/v1/ingestion/upload-batch",
+        headers={"Authorization": f"Bearer {token}"},
+        files=[
+            ("files", ("arquivo1.txt", b"conteudo um", "text/plain")),
+            ("files", ("arquivo2.csv", b"coluna\nvalor", "text/csv")),
+        ],
+        data={"category": "pesquisa"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["totalFiles"] == 2
+    assert payload["successCount"] == 2
+    assert payload["failureCount"] == 0
+    assert payload["items"][0]["status"] == "indexed"

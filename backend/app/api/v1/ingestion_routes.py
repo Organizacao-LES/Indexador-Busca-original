@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.domain.user import User
 from app.schemas.document_schema import (
+    BatchUploadResponse,
     DocumentUploadResponse,
     IngestionBatchFileResponse,
     IngestionHistoryEntryResponse,
@@ -36,6 +37,27 @@ def upload_document(
         document_date=document_date,
     )
     return document_service.to_upload_response(document)
+
+
+@router.post(
+    "/upload-batch",
+    response_model=BatchUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_documents_batch(
+    files: list[UploadFile] = File(...),
+    category: str = Form(...),
+    document_date: date | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return document_service.upload_documents_batch(
+        db,
+        files=files,
+        category=category,
+        uploaded_by=current_user,
+        document_date=document_date,
+    )
 
 
 @router.get("/batch", response_model=list[IngestionBatchFileResponse])

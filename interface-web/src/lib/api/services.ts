@@ -16,6 +16,8 @@ import { appEnv } from "@/lib/env";
 import { storageKeys } from "@/lib/storage";
 import type {
   AppSettings,
+  BatchUploadPayload,
+  BatchUploadResult,
   DocumentDetails,
   DocumentUploadPayload,
   HistoryEntry,
@@ -52,6 +54,68 @@ const persistSettings = (settings: AppSettings) => {
   localStorage.setItem(storageKeys.settings, JSON.stringify(settings));
 };
 
+type BackendUser = {
+  cod_usuario: number;
+  nome: string;
+  login: string;
+  email: string;
+  perfil: "ADMIN" | "USER";
+  ativo: boolean;
+};
+
+type BackendUserPayload = {
+  nome?: string;
+  login?: string;
+  email?: string;
+  perfil?: "ADMIN" | "USER";
+  ativo?: boolean;
+  senha?: string;
+};
+
+const mapBackendRole = (perfil: BackendUser["perfil"]): UserSummary["role"] =>
+  perfil === "ADMIN" ? "Administrador" : "Usuário";
+
+const mapUser = (user: BackendUser): UserSummary => ({
+  id: user.cod_usuario,
+  name: user.nome,
+  login: user.login,
+  email: user.email,
+  role: mapBackendRole(user.perfil),
+  active: user.ativo,
+});
+
+type BackendSessionUser = {
+  id?: number;
+  cod_usuario?: number;
+  name?: string;
+  nome?: string;
+  login: string;
+  email: string;
+  role?: string;
+  perfil?: "ADMIN" | "USER";
+  active?: boolean;
+  ativo?: boolean;
+  token?: string;
+  access_token?: string;
+};
+
+const mapSessionRole = (role?: string, perfil?: BackendSessionUser["perfil"]): SessionUser["role"] => {
+  if (role === "Administrador" || perfil === "ADMIN" || role === "ADMIN") {
+    return "Administrador";
+  }
+  return "Usuário";
+};
+
+const mapSessionUser = (session: BackendSessionUser): SessionUser => ({
+  id: session.id ?? session.cod_usuario ?? 0,
+  name: session.name ?? session.nome ?? session.login,
+  login: session.login,
+  email: session.email,
+  role: mapSessionRole(session.role, session.perfil),
+  active: session.active ?? session.ativo ?? true,
+  token: session.token ?? session.access_token ?? "",
+});
+
 export const authService = {
   async login(email: string, password: string): Promise<SessionUser> {
     if (shouldUseMocks()) {
@@ -66,10 +130,11 @@ export const authService = {
       };
     }
 
-    return apiRequest<SessionUser>("/api/v1/auth/login", {
+    const session = await apiRequest<BackendSessionUser>("/api/v1/auth/login", {
       method: "POST",
       body: { email, password },
     });
+    return mapSessionUser(session);
   },
 };
 
@@ -137,7 +202,60 @@ export const userService = {
       return mockUsers;
     }
 
-    return apiRequest<UserSummary[]>("/api/v1/users");
+    const users = await apiRequest<BackendUser[]>("/api/v1/users/");
+    return users.map(mapUser);
+  },
+
+  async create(payload: {
+    name: string;
+    login: string;
+    email: string;
+    password: string;
+    role: UserSummary["role"];
+  }): Promise<UserSummary> {
+    const body: BackendUserPayload = {
+      nome: payload.name,
+      login: payload.login,
+      email: payload.email,
+      senha: payload.password,
+      perfil: payload.role === "Administrador" ? "ADMIN" : "USER",
+      ativo: true,
+    };
+    const created = await apiRequest<BackendUser>("/api/v1/users/", {
+      method: "POST",
+      body,
+    });
+    return mapUser(created);
+  },
+
+  async update(
+    id: number,
+    payload: {
+      name: string;
+      login: string;
+      email: string;
+      role: UserSummary["role"];
+    },
+  ): Promise<UserSummary> {
+    const body: BackendUserPayload = {
+      nome: payload.name,
+      login: payload.login,
+      email: payload.email,
+      perfil: payload.role === "Administrador" ? "ADMIN" : "USER",
+    };
+    const updated = await apiRequest<BackendUser>(`/api/v1/users/${id}`, {
+      method: "PUT",
+      body,
+    });
+    return mapUser(updated);
+  },
+
+  async toggleActive(id: number, active: boolean): Promise<UserSummary> {
+    const updated = await apiRequest<BackendUser>(`/api/v1/users/${id}`, {
+      method: "PUT",
+      body: { ativo: active },
+    });
+    return mapUser(updated);
   },
 };
 
@@ -193,6 +311,37 @@ export const ingestionService = {
     }
 
     return apiRequest<IngestionHistoryEntry[]>("/api/v1/ingestion/history");
+  },
+
+  async uploadBatch(payload: BatchUploadPayload): Promise<BatchUploadResult> {
+    if (shouldUseMocks()) {
+      await delay(700);
+      return {
+        totalFiles: payload.files.length,
+        successCount: payload.files.length,
+        failureCount: 0,
+        items: payload.files.map((file, index) => ({
+          fileName: file.name,
+          status: "indexed",
+          message: "Documento validado, extraído e armazenado com sucesso.",
+          documentId: Date.now() + index,
+          extractedCharacters: 1200,
+          sizeLabel: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        })),
+      };
+    }
+
+    const formData = new FormData();
+    payload.files.forEach((file) => formData.append("files", file));
+    formData.append("category", payload.category);
+    if (payload.documentDate) {
+      formData.append("document_date", payload.documentDate);
+    }
+
+    return apiRequest<BatchUploadResult>("/api/v1/ingestion/upload-batch", {
+      method: "POST",
+      body: formData,
+    });
   },
 };
 
