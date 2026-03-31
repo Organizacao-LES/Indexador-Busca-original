@@ -69,6 +69,8 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
       const payload = await response.json();
       if (payload?.message) {
         message = payload.message;
+      } else if (payload?.detail) {
+        message = payload.detail;
       }
     } catch {
       // ignore invalid error bodies

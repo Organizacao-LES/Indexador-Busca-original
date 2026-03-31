@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RoleRoute } from "@/components/RoleRoute";
 import { AuthProvider } from "@/contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import SearchPage from "./pages/SearchPage";
@@ -43,12 +44,14 @@ const App = () => (
                 <Route path="/busca" element={<SearchPage />} />
                 <Route path="/resultados" element={<ResultsPage />} />
                 <Route path="/documento/:id" element={<DocumentViewPage />} />
-                <Route path="/ingestao" element={<IngestionPage />} />
-                <Route path="/indexacao" element={<IndexStatusPage />} />
-                <Route path="/metricas" element={<MetricsPage />} />
                 <Route path="/historico" element={<HistoryPage />} />
-                <Route path="/usuarios" element={<UsersPage />} />
                 <Route path="/configuracoes" element={<SettingsPage />} />
+                <Route element={<RoleRoute allow="admin" />}>
+                  <Route path="/ingestao" element={<IngestionPage />} />
+                  <Route path="/indexacao" element={<IndexStatusPage />} />
+                  <Route path="/metricas" element={<MetricsPage />} />
+                  <Route path="/usuarios" element={<UsersPage />} />
+                </Route>
               </Route>
             </Route>
             <Route path="*" element={<NotFound />} />

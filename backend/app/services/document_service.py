@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from datetime import date, datetime
+from mimetypes import guess_type
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ from app.exceptions.document_exceptions import (
     DocumentValidationException,
 )
 from app.repositories.document_repository import DocumentRepository
+from app.services.administrative_history_service import administrative_history_service
 
 
 class DocumentService:
@@ -101,6 +103,14 @@ class DocumentService:
         )
         db.add(ingestion_history)
         db.commit()
+        administrative_history_service.log_action(
+            db,
+            actor=uploaded_by,
+            description=f"Upload do documento {title}.{extension} concluído.",
+            action_type="Ingestão",
+            entity_type="documento",
+            entity_id=document.cod_documento,
+        )
 
         return self.get_document_payload(db, document.cod_documento)
 
@@ -166,6 +176,18 @@ class DocumentService:
                 )
 
         total_files = len(files)
+        if total_files > 0:
+            administrative_history_service.log_action(
+                db,
+                actor=uploaded_by,
+                description=(
+                    f"Upload em lote processado: {success_count} sucesso(s), "
+                    f"{total_files - success_count} falha(s)."
+                ),
+                action_type="Ingestão",
+                entity_type="lote_documento",
+                entity_id=total_files,
+            )
         return {
             "totalFiles": total_files,
             "successCount": success_count,
@@ -178,6 +200,16 @@ class DocumentService:
         if payload is None:
             raise DocumentNotFoundException()
         return payload
+
+    def get_document_file(self, db: Session, document_id: int) -> tuple[Path, str, str]:
+        payload = self.get_document_payload(db, document_id)
+        file_path = Path(payload["file_path"])
+        if not file_path.exists() or not file_path.is_file():
+            raise DocumentNotFoundException("Arquivo físico do documento não encontrado.")
+
+        file_name = payload["file_name"]
+        media_type = guess_type(file_name)[0] or self._get_mime_type(payload["type"].lower())
+        return file_path, file_name, media_type
 
     def list_ingestion_history(self, db: Session, limit: int = 20) -> list[dict]:
         return self.document_repository.list_ingestion_history(db, limit=limit)
@@ -248,7 +280,7 @@ class DocumentService:
             "version": int(payload["version"]),
             "indexedAt": payload["uploaded_at"].isoformat(),
             "size": self._format_size(payload["size_bytes"]),
-            "downloadUrl": None,
+            "downloadUrl": f"/api/v1/documents/{payload['id']}/download",
             "content": payload["content"] or "Pré-visualização indisponível para este formato.",
             "extractedCharacters": extracted_characters,
         }
@@ -319,8 +351,10 @@ class DocumentService:
             )
 
     def _store_file(self, content: bytes, extension: str) -> Path:
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-        target = self.storage_dir / f"{uuid4().hex}.{extension}"
+        now = datetime.utcnow()
+        target_dir = self.storage_dir / str(now.year) / f"{now.month:02d}" / extension.lower()
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{uuid4().hex}.{extension}"
         target.write_bytes(content)
         return target
 

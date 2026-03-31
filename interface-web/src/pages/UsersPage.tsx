@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState, type ElementType } from "react";
 import { Edit, UserX, UserCheck, Plus, Shield, ShieldCheck } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -9,26 +10,100 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { PageError, PageLoader } from "@/components/PageState";
 import { useUsers } from "@/hooks/use-app-query";
+import { userService } from "@/lib/api/services";
 import type { UserRole, UserSummary } from "@/types/app";
 
-const roleIcons: Record<UserRole, React.ElementType> = {
+const roleIcons: Record<UserRole, ElementType> = {
   Administrador: ShieldCheck,
   Usuário: Shield,
 };
 
 const UsersPage = () => {
   const { data, isLoading, isError, refetch } = useUsers();
-  const [users, setUsers] = useState<UserSummary[]>([]);
   const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    login: "",
+    email: "",
+    password: "",
+    role: "Usuário" as UserRole,
+  });
+  const [editForm, setEditForm] = useState({
+    name: "",
+    login: "",
+    email: "",
+    role: "Usuário" as UserRole,
+  });
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (data && users.length === 0) {
-      setUsers(data);
-    }
-  }, [data, users.length]);
+  const reloadUsers = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["users"] });
+    await refetch();
+  };
+
+  const createMutation = useMutation({
+    mutationFn: userService.create,
+    onSuccess: async () => {
+      setCreateOpen(false);
+      setCreateForm({ name: "", login: "", email: "", password: "", role: "Usuário" });
+      await reloadUsers();
+      toast({
+        title: "Usuário cadastrado",
+        description: "Novo usuário criado com sucesso. Ação registrada no histórico administrativo.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Falha ao cadastrar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: typeof editForm }) =>
+      userService.update(id, payload),
+    onSuccess: async () => {
+      setEditOpen(false);
+      setEditingUser(null);
+      await reloadUsers();
+      toast({
+        title: "Usuário atualizado",
+        description: "Perfil de acesso alterado com sucesso. Ação registrada no histórico.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Falha ao atualizar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, active }: { id: number; active: boolean }) =>
+      userService.toggleActive(id, active),
+    onSuccess: async (user) => {
+      await reloadUsers();
+      toast({
+        title: user.active ? "Usuário ativado" : "Usuário inativado",
+        description: `${user.name} foi ${user.active ? "ativado" : "inativado"} com sucesso. Ação registrada no histórico.`,
+        variant: user.active ? "default" : "destructive",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Falha ao alterar status do usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   if (isLoading) {
     return <PageLoader label="Carregando usuários..." />;
@@ -38,40 +113,32 @@ const UsersPage = () => {
     return <PageError title="Falha ao carregar usuários." onRetry={() => refetch()} />;
   }
 
-  const effectiveUsers = users.length ? users : data || [];
+  const effectiveUsers = data || [];
 
   const toggleActive = (id: number) => {
     const user = effectiveUsers.find((u) => u.id === id);
     if (!user) return;
-    const newStatus = !user.active;
-    setUsers(effectiveUsers.map((u) => (u.id === id ? { ...u, active: newStatus } : u)));
-    toast({
-      title: newStatus ? "Usuário ativado" : "Usuário inativado",
-      description: `${user.name} foi ${newStatus ? "ativado" : "inativado"} com sucesso. Ação registrada no histórico.`,
-      variant: newStatus ? "default" : "destructive",
-    });
+    toggleActiveMutation.mutate({ id, active: !user.active });
   };
 
   const handleCreate = () => {
-    setCreateOpen(false);
-    toast({
-      title: "Usuário cadastrado",
-      description: "Novo usuário criado com sucesso. Ação registrada no histórico administrativo.",
-    });
+    createMutation.mutate(createForm);
   };
 
   const handleEdit = (user: UserSummary) => {
     setEditingUser(user);
+    setEditForm({
+      name: user.name,
+      login: user.login,
+      email: user.email,
+      role: user.role,
+    });
     setEditOpen(true);
   };
 
   const handleSaveEdit = () => {
-    setEditOpen(false);
-    setEditingUser(null);
-    toast({
-      title: "Usuário atualizado",
-      description: "Perfil de acesso alterado com sucesso. Ação registrada no histórico.",
-    });
+    if (!editingUser) return;
+    updateMutation.mutate({ id: editingUser.id, payload: editForm });
   };
 
   return (
@@ -97,23 +164,47 @@ const UsersPage = () => {
             <div className="space-y-4 pt-2">
               <div className="space-y-1.5">
                 <Label>Nome completo</Label>
-                <Input placeholder="Nome completo do usuário" />
+                <Input
+                  placeholder="Nome completo do usuário"
+                  value={createForm.name}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Login</Label>
-                <Input placeholder="Login de acesso" />
+                <Input
+                  placeholder="Login de acesso"
+                  value={createForm.login}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, login: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>E-mail institucional</Label>
-                <Input type="email" placeholder="email@ifes.edu.br" />
+                <Input
+                  type="email"
+                  placeholder="email@ifes.edu.br"
+                  value={createForm.email}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Senha</Label>
-                <Input type="password" placeholder="Senha de acesso" />
+                <Input
+                  type="password"
+                  placeholder="Senha de acesso"
+                  value={createForm.password}
+                  onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Perfil de Acesso</Label>
-                <Select>
+                <Select
+                  value={createForm.role === "Administrador" ? "admin" : "usuario"}
+                  onValueChange={(value) => setCreateForm((current) => ({
+                    ...current,
+                    role: value === "admin" ? "Administrador" : "Usuário",
+                  }))}
+                >
                   <SelectTrigger><SelectValue placeholder="Selecione o perfil" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador</SelectItem>
@@ -127,7 +218,7 @@ const UsersPage = () => {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate}>Cadastrar Usuário</Button>
+              <Button onClick={handleCreate} disabled={createMutation.isPending}>Cadastrar Usuário</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -143,19 +234,34 @@ const UsersPage = () => {
             <div className="space-y-4 pt-2">
               <div className="space-y-1.5">
                 <Label>Nome completo</Label>
-                <Input defaultValue={editingUser.name} />
+                <Input
+                  value={editForm.name}
+                  onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Login</Label>
-                <Input defaultValue={editingUser.login} />
+                <Input
+                  value={editForm.login}
+                  onChange={(event) => setEditForm((current) => ({ ...current, login: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>E-mail</Label>
-                <Input defaultValue={editingUser.email} />
+                <Input
+                  value={editForm.email}
+                  onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Perfil de Acesso</Label>
-                <Select defaultValue={editingUser.role === "Administrador" ? "admin" : "usuario"}>
+                <Select
+                  value={editForm.role === "Administrador" ? "admin" : "usuario"}
+                  onValueChange={(value) => setEditForm((current) => ({
+                    ...current,
+                    role: value === "admin" ? "Administrador" : "Usuário",
+                  }))}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador</SelectItem>
@@ -170,7 +276,7 @@ const UsersPage = () => {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveEdit}>Salvar Alterações</Button>
+            <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>Salvar Alterações</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
