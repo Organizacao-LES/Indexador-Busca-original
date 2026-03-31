@@ -2,7 +2,6 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
 
 from app.core.database import Base
 
-
 class AdministrativeHistory(Base):
     __tablename__ = "historico_administrativo"
 
