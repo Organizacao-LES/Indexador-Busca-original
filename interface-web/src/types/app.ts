@@ -145,6 +145,13 @@ export type IndexStatusSnapshot = {
   logs: IndexLogEntry[];
 };
 
+export type ReindexResult = {
+  processedDocuments: number;
+  successCount: number;
+  failureCount: number;
+  message: string;
+};
+
 export type MetricsOverview = {
   totalQueries: number;
   averageSearchTime: string;
