@@ -1,10 +1,21 @@
+from pipeline_indexador.src.stages.preprocess_stage import PreprocessStage
+from pipeline_indexador.src.stages.tokenize_stage import TokenizeStage
+from pipeline_indexador.src.stages.remove_stopwords_stage import RemoveStopwordsStage
+from pipeline_indexador.src.stages.index_build_stage import IndexBuildStage
+
+
 class IndexPipeline:
     """
     Pipeline responsável por executar as etapas de indexação.
     """
 
-    def __init__(self):
-        self.stages = []
+    def __init__(self, index_repository):
+        self.stages = [
+            PreprocessStage(),
+            TokenizeStage(),
+            RemoveStopwordsStage(),
+            IndexBuildStage(repository=index_repository)
+        ]
 
     def add_stage(self, stage):
         """
