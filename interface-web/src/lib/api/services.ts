@@ -25,6 +25,7 @@ import type {
   IngestionBatchFile,
   IngestionHistoryEntry,
   MetricsSnapshot,
+  ReindexResult,
   SearchFilters,
   SearchHistoryItem,
   SearchResponse,
@@ -353,6 +354,22 @@ export const indexService = {
     }
 
     return apiRequest<IndexStatusSnapshot>("/api/v1/index/status");
+  },
+
+  async reindexAll(): Promise<ReindexResult> {
+    if (shouldUseMocks()) {
+      await delay(800);
+      return {
+        processedDocuments: 3,
+        successCount: 3,
+        failureCount: 0,
+        message: "Reindexação concluída com sucesso.",
+      };
+    }
+
+    return apiRequest<ReindexResult>("/api/v1/index/reindex", {
+      method: "POST",
+    });
   },
 };
 

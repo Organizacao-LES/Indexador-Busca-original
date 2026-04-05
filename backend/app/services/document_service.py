@@ -24,6 +24,7 @@ from app.exceptions.document_exceptions import (
 )
 from app.repositories.document_repository import DocumentRepository
 from app.services.administrative_history_service import administrative_history_service
+from app.services.index_service import index_service
 
 
 class DocumentService:
@@ -69,7 +70,7 @@ class DocumentService:
         storage_path = self._store_file(content, extension)
         title = Path(filename).stem or f"documento-{uuid4().hex[:8]}"
         category_row = self._get_or_create_category(db, normalized_category)
-        status_row = self._get_or_create_status(db, "concluido")
+        processing_status = self._get_or_create_status(db, "processando")
 
         document = Document(
             cod_categoria=category_row.cod_categoria,
@@ -92,16 +93,40 @@ class DocumentService:
             versao_ativa=True,
         )
         db.add(history_document)
+        db.flush()
 
         ingestion_history = IngestionHistory(
             cod_usuario=uploaded_by.cod_usuario,
             cod_documento=document.cod_documento,
-            cod_status_ingestao=status_row.cod_status_ingestao,
+            cod_status_ingestao=processing_status.cod_status_ingestao,
             tipo_ingestao="manual",
             mensagem_erro=None,
-            tempo_processamento_ms=int((time.perf_counter() - started_at) * 1000),
+            tempo_processamento_ms=0,
         )
         db.add(ingestion_history)
+        db.flush()
+
+        try:
+            index_service.process_document(
+                db,
+                document_id=document.cod_documento,
+                triggered_by=uploaded_by,
+                trigger_label="Ingestão",
+            )
+            completed_status = self._get_or_create_status(db, "concluido")
+            ingestion_history.cod_status_ingestao = completed_status.cod_status_ingestao
+            ingestion_history.mensagem_erro = None
+        except Exception as exc:
+            failed_status = self._get_or_create_status(db, "falha")
+            ingestion_history.cod_status_ingestao = failed_status.cod_status_ingestao
+            ingestion_history.mensagem_erro = str(exc)[:255]
+            ingestion_history.tempo_processamento_ms = int(
+                (time.perf_counter() - started_at) * 1000
+            )
+            db.commit()
+            raise
+
+        ingestion_history.tempo_processamento_ms = int((time.perf_counter() - started_at) * 1000)
         db.commit()
         administrative_history_service.log_action(
             db,
@@ -210,6 +235,13 @@ class DocumentService:
         file_name = payload["file_name"]
         media_type = guess_type(file_name)[0] or self._get_mime_type(payload["type"].lower())
         return file_path, file_name, media_type
+
+    def reindex_document(self, db: Session, *, document_id: int, triggered_by: User) -> dict:
+        return index_service.reindex_document(
+            db,
+            document_id=document_id,
+            triggered_by=triggered_by,
+        )
 
     def list_ingestion_history(self, db: Session, limit: int = 20) -> list[dict]:
         return self.document_repository.list_ingestion_history(db, limit=limit)
