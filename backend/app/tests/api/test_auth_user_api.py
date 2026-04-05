@@ -160,3 +160,37 @@ def test_non_admin_cannot_access_admin_routes(client: TestClient):
 
     assert response.status_code == 403
     assert response.json()["message"] == "Operação não permitida para o perfil do usuário."
+
+
+def test_admin_history_is_logged_and_protected(client: TestClient):
+    admin_session = login(client, "admin@ifes.edu.br", "admin123")
+
+    create_response = client.post(
+        "/api/v1/users/",
+        headers={"Authorization": f"Bearer {admin_session['token']}"},
+        json={
+            "nome": "Usuário Auditoria",
+            "login": "usuario.auditoria",
+            "email": "usuario.auditoria@ifes.edu.br",
+            "perfil": UserRole.USER.value,
+            "ativo": True,
+            "senha": "teste1234",
+        },
+    )
+    assert create_response.status_code == 201
+
+    history_response = client.get(
+        "/api/v1/history/",
+        headers={"Authorization": f"Bearer {admin_session['token']}"},
+    )
+    assert history_response.status_code == 200
+    history_payload = history_response.json()
+    assert len(history_payload) >= 1
+    assert history_payload[0]["action"] == "Criação de Usuário"
+
+    user_session = login(client, "usuario.auditoria@ifes.edu.br", "teste1234")
+    forbidden_response = client.get(
+        "/api/v1/history/",
+        headers={"Authorization": f"Bearer {user_session['token']}"},
+    )
+    assert forbidden_response.status_code == 403

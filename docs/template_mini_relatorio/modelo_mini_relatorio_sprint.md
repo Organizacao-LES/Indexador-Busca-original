@@ -5,7 +5,7 @@
 **PROF.: JAIMEL DE OLIVEIRA LIMA**
 
 **Aluno(s) / Grupo: Lucas Garcia, Luís Augusto e Pedro Emanuel**  
-**Entrega/Sprint: Sprint 2**  
+**Entrega/Sprint: Sprint 4**  
 **Data prevista de entrega: 24/03**  
 **Data de envio: 24/03**
 

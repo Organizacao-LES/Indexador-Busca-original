@@ -12,12 +12,18 @@ from starlette.requests import Request
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.domain.administrative_history import AdministrativeHistory
 from app.domain.document_category import DocumentCategory
+from app.domain.document_field import DocumentField
 from app.domain.document_history import DocumentHistory
+from app.domain.field_type import FieldType
+from app.domain.index_history import IndexHistory
 from app.domain.ingestion_history import IngestionHistory
 from app.domain.ingestion_status import IngestionStatus
+from app.domain.inverted_index import InvertedIndex
 from app.domain.invalid_document import InvalidDocument
 from app.domain.document import Document
+from app.domain.term import Term
 from app.domain.user import User
 
 
@@ -45,11 +51,23 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(_: Request, exc: StarletteHTTPException):
-    first_error = exc.errors()[0] if exc.errors() else None
-    message = first_error.get("msg", "Dados inválidos.") if first_error else "Dados inválidos."
+    detail = exc.detail
+    if isinstance(detail, list) and detail:
+        first_error = detail[0]
+        if isinstance(first_error, dict):
+            message = first_error.get("msg", "Dados inválidos.")
+        else:
+            message = str(first_error)
+    elif isinstance(detail, dict):
+        message = str(detail.get("message") or detail.get("detail") or "Erro na requisição.")
+    elif isinstance(detail, str):
+        message = detail
+    else:
+        message = "Erro na requisição."
+
     return JSONResponse(
         status_code=exc.status_code,
-        content={"message": f"{message} - {exc.detail}"},
+        content={"message": message},
     )
 
 
