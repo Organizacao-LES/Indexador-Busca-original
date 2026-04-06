@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from src.pipeline.pipeline_stage import PipelineStage
 
 
@@ -17,8 +18,15 @@ class PreprocessStage(PipelineStage):
 
         text = context.get("text", "")
 
-        normalized = re.sub(r"[^\w\s]", "", text.lower())
+        # 1. Lowercase the text
+        lower_text = text.lower()
 
-        context["processed_text"] = normalized
+        # 2. Remove accents (diacritics)
+        normalized_text = unicodedata.normalize('NFKD', lower_text).encode('ascii', 'ignore').decode('utf-8')
+
+        # 3. Remove non-alphanumeric characters (keeping spaces)
+        clean_text = re.sub(r"[^\w\s]", "", normalized_text)
+
+        context["processed_text"] = clean_text
 
         return context
