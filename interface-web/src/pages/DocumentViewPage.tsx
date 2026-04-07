@@ -29,6 +29,19 @@ const DocumentViewPage = () => {
     }
   };
 
+  const handleDownload = () => {
+    if (!document.downloadUrl) {
+      toast({
+        title: "Download indisponível",
+        description: "Este documento não possui arquivo associado para recuperação.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    window.open(document.downloadUrl, "_blank", "noopener,noreferrer");
+  };
+
   if (isLoading) {
     return <PageLoader label="Carregando documento..." />;
   }
@@ -54,7 +67,7 @@ const DocumentViewPage = () => {
             <RefreshCw className={`h-4 w-4 ${reindexing ? "animate-spin" : ""}`} />
             {reindexing ? "Reindexando..." : "Reindexar (Admin)"}
           </Button>
-          <Button className="gap-2">
+          <Button className="gap-2" onClick={handleDownload}>
             <Download className="h-4 w-4" />
             Download
           </Button>
@@ -96,6 +109,10 @@ const DocumentViewPage = () => {
             <div className="flex items-center gap-2 text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
               Indexado em {document.indexedAt}
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              {document.extractedCharacters} caracteres extraídos
             </div>
           </div>
         </div>

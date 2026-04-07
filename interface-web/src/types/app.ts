@@ -61,6 +61,7 @@ export type DocumentDetails = {
   size: string;
   downloadUrl?: string;
   content: string;
+  extractedCharacters: number;
 };
 
 export type IngestionBatchFile = {
@@ -75,6 +76,52 @@ export type IngestionHistoryEntry = {
   type: string;
   result: string;
   details: string;
+};
+
+export type DocumentUploadPayload = {
+  file: File;
+  category: string;
+  documentDate?: string;
+};
+
+export type BatchUploadPayload = {
+  files: File[];
+  category: string;
+  documentDate?: string;
+};
+
+export type UploadedDocument = {
+  id: number;
+  title: string;
+  fileName: string;
+  category: string;
+  type: string;
+  mimeType: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  date: string | null;
+  uploadedAt: string;
+  validated: boolean;
+  integrityOk: boolean;
+  hash: string;
+  extracted: boolean;
+  extractedCharacters: number;
+};
+
+export type BatchUploadItem = {
+  fileName: string;
+  status: "indexed" | "error";
+  message: string;
+  documentId?: number | null;
+  extractedCharacters: number;
+  sizeLabel?: string | null;
+};
+
+export type BatchUploadResult = {
+  totalFiles: number;
+  successCount: number;
+  failureCount: number;
+  items: BatchUploadItem[];
 };
 
 export type IndexLogEntry = {
@@ -96,6 +143,13 @@ export type IndexStatusSnapshot = {
     failed: number;
   };
   logs: IndexLogEntry[];
+};
+
+export type ReindexResult = {
+  processedDocuments: number;
+  successCount: number;
+  failureCount: number;
+  message: string;
 };
 
 export type MetricsOverview = {

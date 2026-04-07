@@ -6,18 +6,32 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { PageError, PageLoader } from "@/components/PageState";
 import { useIndexStatus } from "@/hooks/use-app-query";
+import { indexService } from "@/lib/api/services";
 
 const IndexStatusPage = () => {
   const { data, isLoading, isError, refetch } = useIndexStatus();
   const { toast } = useToast();
   const [reindexing, setReindexing] = useState(false);
 
-  const handleReindex = () => {
+  const handleReindex = async () => {
     setReindexing(true);
-    setTimeout(() => {
+    try {
+      const result = await indexService.reindexAll();
+      await refetch();
+      toast({
+        title: "Reindexação concluída",
+        description: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao executar a reindexação.";
+      toast({
+        title: "Falha na reindexação",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
       setReindexing(false);
-      toast({ title: "Reindexação concluída", description: "Índice reconstruído com sucesso (UC13)." });
-    }, 3000);
+    }
   };
 
   if (isLoading) {
