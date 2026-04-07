@@ -8,7 +8,6 @@ import {
   Users,
   Settings,
   LogOut,
-  FileText,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { appEnv } from "@/lib/env";
@@ -37,7 +36,11 @@ export function AppSidebar() {
     <aside className="w-64 min-h-screen bg-sidebar flex flex-col border-r border-sidebar-border shrink-0">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
-        <FileText className="h-7 w-7 text-sidebar-primary mr-3" />
+        <img
+          src="/logo_ifesdoc.ico"
+          alt="Logo do IFESDOC"
+          className="h-8 w-8 rounded-sm object-contain mr-3 shrink-0"
+        />
         <span className="text-xl font-bold text-sidebar-accent-foreground tracking-tight">
           {appEnv.appName}
         </span>

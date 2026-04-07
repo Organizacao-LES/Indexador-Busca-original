@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FileText, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -52,9 +52,11 @@ const LoginPage = () => {
         <div className="glass-card p-8">
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <div className="h-14 w-14 rounded-xl bg-primary flex items-center justify-center mb-4">
-              <FileText className="h-7 w-7 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo_ifesdoc.ico"
+              alt="Logo do IFESDOC"
+              className="h-14 w-14 rounded-xl object-contain mb-4"
+            />
             <h1 className="text-2xl font-bold text-foreground">IFESDOC</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Sistema de Indexação e Busca de Documentos
