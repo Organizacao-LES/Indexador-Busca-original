@@ -102,6 +102,33 @@ const IndexStatusPage = () => {
         </div>
       </div>
 
+      <div className="glass-card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">Integridade do Índice</h3>
+          <Badge variant={data.integrityOk ? "default" : "destructive"}>
+            {data.integrityOk ? "Consistente" : `${data.inconsistencyCount} inconsistência(s)`}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.documentsWithoutActiveVersion}</p>
+            <p className="text-xs text-muted-foreground">Sem versão ativa</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.documentsWithoutIndex}</p>
+            <p className="text-xs text-muted-foreground">Sem índice</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.orphanIndexEntries}</p>
+            <p className="text-xs text-muted-foreground">Entradas órfãs</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.staleTerms}</p>
+            <p className="text-xs text-muted-foreground">Termos desatualizados</p>
+          </div>
+        </div>
+      </div>
+
       {/* Current Progress */}
       <div className="glass-card p-5 mb-6">
         <div className="flex items-center justify-between mb-3">
@@ -126,6 +153,35 @@ const IndexStatusPage = () => {
           <p className="text-lg font-bold text-destructive">{data.summary.failed}</p>
           <p className="text-xs text-muted-foreground">Falhas</p>
         </div>
+      </div>
+
+      <div className="glass-card p-5 mb-6">
+        <h3 className="text-sm font-semibold text-foreground mb-4">Métricas Básicas do Índice</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.activeDocuments}</p>
+            <p className="text-xs text-muted-foreground">Docs ativos</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.activeVersions}</p>
+            <p className="text-xs text-muted-foreground">Versões ativas</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.totalTerms}</p>
+            <p className="text-xs text-muted-foreground">Termos</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.totalPostings}</p>
+            <p className="text-xs text-muted-foreground">Postings</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.averageTermsPerDocument}</p>
+            <p className="text-xs text-muted-foreground">Termos/doc</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">
+          Última indexação bem-sucedida: {data.metrics.lastIndexedAt ? new Date(data.metrics.lastIndexedAt).toLocaleString("pt-BR") : "indisponível"}
+        </p>
       </div>
 
       {/* Log */}

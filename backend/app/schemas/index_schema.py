@@ -13,14 +13,34 @@ class IndexSummaryResponse(BaseModel):
     failed: int
 
 
+class IndexConsistencyResponse(BaseModel):
+    documentsWithoutActiveVersion: int
+    documentsWithoutIndex: int
+    orphanIndexEntries: int
+    staleTerms: int
+
+
+class IndexMetricsResponse(BaseModel):
+    activeDocuments: int
+    activeVersions: int
+    totalTerms: int
+    totalPostings: int
+    averageTermsPerDocument: str
+    lastIndexedAt: str | None = None
+
+
 class IndexStatusResponse(BaseModel):
     indexedDocuments: int
     averageTime: str
     successRate: str
     errors: int
+    integrityOk: bool
+    inconsistencyCount: int
     currentProgress: int
     remainingEstimate: str
     summary: IndexSummaryResponse
+    consistency: IndexConsistencyResponse
+    metrics: IndexMetricsResponse
     logs: list[IndexLogEntryResponse]
 
 

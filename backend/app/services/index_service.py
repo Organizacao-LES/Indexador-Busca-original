@@ -6,10 +6,13 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.domain.document import Document
+from app.domain.document_field import DocumentField
 from app.domain.document_history import DocumentHistory
 from app.domain.index_history import IndexHistory
 from app.domain.ingestion_history import IngestionHistory
 from app.domain.ingestion_status import IngestionStatus
+from app.domain.inverted_index import InvertedIndex
+from app.domain.term import Term
 from app.domain.user import User
 from app.exceptions.document_exceptions import DocumentNotFoundException
 from app.pipeline.document_ingestion_pipeline import DocumentIngestionPipeline
@@ -207,12 +210,40 @@ class IndexService:
             .limit(20)
             .all()
         )
+        consistency = self._build_consistency_report(db)
+        metrics = self._build_metrics_report(db)
+        logs = [
+            {
+                "time": row.criado_em.strftime("%H:%M:%S") if row.criado_em else "",
+                "message": (
+                    f"{row.titulo} indexado com sucesso."
+                    if row.mensagem_erro is None
+                    else f"{row.titulo} falhou: {row.mensagem_erro}"
+                ),
+                "type": "success" if row.mensagem_erro is None else "error",
+            }
+            for row in recent_logs
+        ]
+        if not consistency["integrity_ok"]:
+            logs.insert(
+                0,
+                {
+                    "time": "",
+                    "message": (
+                        "Inconsistências detectadas no índice: "
+                        f"{consistency['inconsistency_count']} ocorrência(s)."
+                    ),
+                    "type": "error",
+                },
+            )
 
         return {
             "indexedDocuments": indexed_documents,
             "averageTime": self._format_duration(average_ms),
             "successRate": f"{round((success_runs / total_runs) * 100, 1) if total_runs else 0:.1f}%",
             "errors": error_runs,
+            "integrityOk": consistency["integrity_ok"],
+            "inconsistencyCount": consistency["inconsistency_count"],
             "currentProgress": 100 if total_runs else 0,
             "remainingEstimate": "0 min",
             "summary": {
@@ -220,18 +251,21 @@ class IndexService:
                 "processing": int(ingestion_summary.processing or 0) if ingestion_summary else 0,
                 "failed": int(ingestion_summary.failed or 0) if ingestion_summary else 0,
             },
-            "logs": [
-                {
-                    "time": row.criado_em.strftime("%H:%M:%S") if row.criado_em else "",
-                    "message": (
-                        f"{row.titulo} indexado com sucesso."
-                        if row.mensagem_erro is None
-                        else f"{row.titulo} falhou: {row.mensagem_erro}"
-                    ),
-                    "type": "success" if row.mensagem_erro is None else "error",
-                }
-                for row in recent_logs
-            ],
+            "consistency": {
+                "documentsWithoutActiveVersion": consistency["documents_without_active_version"],
+                "documentsWithoutIndex": consistency["documents_without_index"],
+                "orphanIndexEntries": consistency["orphan_index_entries"],
+                "staleTerms": consistency["stale_terms"],
+            },
+            "metrics": {
+                "activeDocuments": metrics["active_documents"],
+                "activeVersions": metrics["active_versions"],
+                "totalTerms": metrics["total_terms"],
+                "totalPostings": metrics["total_postings"],
+                "averageTermsPerDocument": metrics["average_terms_per_document"],
+                "lastIndexedAt": metrics["last_indexed_at"],
+            },
+            "logs": logs,
         }
 
     def _format_duration(self, duration_ms: float | None) -> str:
@@ -241,6 +275,142 @@ class IndexService:
         if duration_ms >= 1000:
             return f"{duration_ms / 1000:.2f}s"
         return f"{duration_ms:.0f} ms"
+
+    def _build_consistency_report(self, db: Session) -> dict:
+        active_documents = (
+            db.query(func.count(Document.cod_documento))
+            .filter(Document.ativo.is_(True))
+            .scalar()
+            or 0
+        )
+        documents_with_active_version = (
+            db.query(func.count(func.distinct(DocumentHistory.cod_documento)))
+            .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
+            .filter(Document.ativo.is_(True))
+            .filter(DocumentHistory.versao_ativa.is_(True))
+            .scalar()
+            or 0
+        )
+        documents_with_index = (
+            db.query(func.count(func.distinct(DocumentHistory.cod_documento)))
+            .select_from(InvertedIndex)
+            .join(
+                DocumentField,
+                DocumentField.cod_campo_documento == InvertedIndex.cod_campo_documento,
+            )
+            .join(
+                DocumentHistory,
+                DocumentHistory.cod_historico_documento == DocumentField.cod_historico_documento,
+            )
+            .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
+            .filter(Document.ativo.is_(True))
+            .filter(DocumentHistory.versao_ativa.is_(True))
+            .scalar()
+            or 0
+        )
+        orphan_index_entries = (
+            db.query(func.count(InvertedIndex.cod_indice_invertido))
+            .select_from(InvertedIndex)
+            .outerjoin(
+                DocumentField,
+                DocumentField.cod_campo_documento == InvertedIndex.cod_campo_documento,
+            )
+            .outerjoin(
+                DocumentHistory,
+                DocumentHistory.cod_historico_documento == DocumentField.cod_historico_documento,
+            )
+            .outerjoin(Document, Document.cod_documento == DocumentHistory.cod_documento)
+            .filter(
+                (DocumentField.cod_campo_documento.is_(None))
+                | (DocumentHistory.cod_historico_documento.is_(None))
+                | (Document.cod_documento.is_(None))
+                | (Document.ativo.is_(False))
+                | (DocumentHistory.versao_ativa.is_(False))
+            )
+            .scalar()
+            or 0
+        )
+        actual_df_subquery = (
+            db.query(
+                InvertedIndex.cod_termo.label("cod_termo"),
+                func.count(func.distinct(DocumentHistory.cod_documento)).label("actual_df"),
+            )
+            .select_from(InvertedIndex)
+            .join(
+                DocumentField,
+                DocumentField.cod_campo_documento == InvertedIndex.cod_campo_documento,
+            )
+            .join(
+                DocumentHistory,
+                DocumentHistory.cod_historico_documento == DocumentField.cod_historico_documento,
+            )
+            .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
+            .filter(Document.ativo.is_(True))
+            .filter(DocumentHistory.versao_ativa.is_(True))
+            .group_by(InvertedIndex.cod_termo)
+            .subquery()
+        )
+        stale_terms = (
+            db.query(func.count(Term.cod_termo))
+            .outerjoin(actual_df_subquery, actual_df_subquery.c.cod_termo == Term.cod_termo)
+            .filter(
+                func.coalesce(Term.df, 0) != func.coalesce(actual_df_subquery.c.actual_df, 0)
+            )
+            .scalar()
+            or 0
+        )
+
+        documents_without_active_version = max(active_documents - documents_with_active_version, 0)
+        documents_without_index = max(documents_with_active_version - documents_with_index, 0)
+        inconsistency_count = (
+            documents_without_active_version
+            + documents_without_index
+            + orphan_index_entries
+            + stale_terms
+        )
+        return {
+            "documents_without_active_version": documents_without_active_version,
+            "documents_without_index": documents_without_index,
+            "orphan_index_entries": orphan_index_entries,
+            "stale_terms": stale_terms,
+            "inconsistency_count": inconsistency_count,
+            "integrity_ok": inconsistency_count == 0,
+        }
+
+    def _build_metrics_report(self, db: Session) -> dict:
+        active_documents = (
+            db.query(func.count(Document.cod_documento))
+            .filter(Document.ativo.is_(True))
+            .scalar()
+            or 0
+        )
+        active_versions = (
+            db.query(func.count(DocumentHistory.cod_historico_documento))
+            .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
+            .filter(Document.ativo.is_(True))
+            .filter(DocumentHistory.versao_ativa.is_(True))
+            .scalar()
+            or 0
+        )
+        total_terms = db.query(func.count(Term.cod_termo)).scalar() or 0
+        total_postings = db.query(func.count(InvertedIndex.cod_indice_invertido)).scalar() or 0
+        last_indexed_at = (
+            db.query(func.max(IndexHistory.criado_em))
+            .filter(IndexHistory.mensagem_erro.is_(None))
+            .scalar()
+        )
+        average_terms_per_document = (
+            f"{(total_postings / active_documents):.1f}" if active_documents else "0.0"
+        )
+
+        return {
+            "active_documents": active_documents,
+            "active_versions": active_versions,
+            "total_terms": total_terms,
+            "total_postings": total_postings,
+            "average_terms_per_document": average_terms_per_document,
+            "last_indexed_at": last_indexed_at.isoformat() if last_indexed_at else None,
+        }
 
 
 index_service = IndexService()
