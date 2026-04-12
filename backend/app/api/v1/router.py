@@ -6,6 +6,9 @@ from app.api.v1.history_routes import router as history_router
 from app.api.v1.index_routes import router as index_router
 from app.api.v1.ingestion_routes import router as ingestion_router
 from app.api.v1.user_routes import router as user_router
+from app.api.v1.search_routes import router as search_router
+from app.api.v1.metrics_routes import router as metrics_router
+
 
 api_router = APIRouter()
 
@@ -15,3 +18,6 @@ api_router.include_router(history_router)
 api_router.include_router(index_router)
 api_router.include_router(ingestion_router)
 api_router.include_router(user_router)
+
+api_router.include_router(search_router)
+api_router.include_router(metrics_router)

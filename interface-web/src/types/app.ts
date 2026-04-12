@@ -135,12 +135,28 @@ export type IndexStatusSnapshot = {
   averageTime: string;
   successRate: string;
   errors: number;
+  integrityOk: boolean;
+  inconsistencyCount: number;
   currentProgress: number;
   remainingEstimate: string;
   summary: {
     completed: number;
     processing: number;
     failed: number;
+  };
+  consistency: {
+    documentsWithoutActiveVersion: number;
+    documentsWithoutIndex: number;
+    orphanIndexEntries: number;
+    staleTerms: number;
+  };
+  metrics: {
+    activeDocuments: number;
+    activeVersions: number;
+    totalTerms: number;
+    totalPostings: number;
+    averageTermsPerDocument: string;
+    lastIndexedAt?: string | null;
   };
   logs: IndexLogEntry[];
 };
