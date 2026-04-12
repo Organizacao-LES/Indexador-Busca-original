@@ -14,31 +14,37 @@ from app.domain.inverted_index import InvertedIndex
 from app.domain.term import Term
 from app.exceptions.document_exceptions import DocumentValidationException
 from app.pipeline.pipeline_stage import PipelineStage
-from app.utils.text_processing import normalize_text, tokenize_text
+from app.utils.text_processing import preprocess_for_indexing
 
 
 class TextPreprocessStage(PipelineStage):
     def execute(self, db: Session, context: dict) -> dict:
         del db
         extracted_text = context.get("extracted_text", "")
-        processed_text = normalize_text(extracted_text)
-        if not processed_text:
+        preprocessed = preprocess_for_indexing(extracted_text)
+        if not preprocessed["normalized_text"]:
             raise DocumentValidationException(
                 "Não foi possível gerar conteúdo processável para indexação."
             )
-        context["processed_text"] = processed_text
+        context["normalized_text"] = preprocessed["normalized_text"]
+        context["preprocessed_output"] = preprocessed
         return context
 
 
 class TextTokenizeStage(PipelineStage):
     def execute(self, db: Session, context: dict) -> dict:
         del db
-        tokens = tokenize_text(context.get("processed_text", ""))
+        preprocessed = context.get("preprocessed_output") or preprocess_for_indexing(
+            context.get("extracted_text", "")
+        )
+        tokens = preprocessed["tokens"]
         if not tokens:
             raise DocumentValidationException(
                 "O documento não contém termos válidos para indexação."
             )
+        context["processed_text"] = preprocessed["processed_text"]
         context["tokens"] = tokens
+        context["index_payload"] = preprocessed
         return context
 
 
@@ -90,11 +96,11 @@ class RelationalIndexPersistStage(PipelineStage):
         db.add(document_field)
         db.flush()
 
-        positions_by_term: dict[str, list[int]] = defaultdict(list)
-        for position, token in enumerate(tokens):
-            positions_by_term[token].append(position)
+        index_payload = context.get("index_payload") or {
+            "positions_by_term": defaultdict(list)
+        }
+        positions_by_term: dict[str, list[int]] = index_payload["positions_by_term"]
 
-        touched_terms: list[Term] = []
         for token, positions in positions_by_term.items():
             term = db.query(Term).filter(Term.texto_termo == token).first()
             if term is None:
@@ -110,7 +116,6 @@ class RelationalIndexPersistStage(PipelineStage):
                     posicao_inicial=positions[0],
                 )
             )
-            touched_terms.append(term)
             affected_term_ids.add(term.cod_termo)
 
         db.flush()
@@ -153,6 +158,6 @@ class RelationalIndexPersistStage(PipelineStage):
             else:
                 term.idf = 0
 
-        context["term_count"] = len(positions_by_term)
-        context["token_count"] = len(tokens)
+        context["term_count"] = index_payload["term_count"]
+        context["token_count"] = index_payload["token_count"]
         return context
