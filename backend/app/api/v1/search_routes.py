@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.domain.user import User
+from app.schemas.search_schema import SearchHistoryItemResponse, SearchResponse
 from app.services.search_service import search_service
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
-@router.get("/")
+@router.get("", response_model=SearchResponse)
+@router.get("/", response_model=SearchResponse)
 def search_documents(
     q: str = Query(..., min_length=1, description="Consulta de busca"),
     category: str | None = Query(default=None),
@@ -36,7 +38,7 @@ def search_documents(
     )
 
 
-@router.get("/history")
+@router.get("/history", response_model=list[SearchHistoryItemResponse])
 def list_recent_searches(
     limit: int = Query(10, ge=1, le=20),
     db: Session = Depends(get_db),

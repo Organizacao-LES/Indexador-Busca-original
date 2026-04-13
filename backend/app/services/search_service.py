@@ -1,11 +1,11 @@
 import math
 import time
-from collections import defaultdict
 
 from sqlalchemy.orm import Session
 
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.search_repository import SearchRepository
+from app.strategies.search_ranking_strategy import SearchRankingStrategy
 from app.utils.text_processing import preprocess_for_indexing
 
 
@@ -13,6 +13,7 @@ class SearchService:
     def __init__(self, repository: SearchRepository):
         self.repository = repository
         self.document_repository = DocumentRepository()
+        self.ranking_strategy = SearchRankingStrategy()
 
     def search(
         self,
@@ -54,30 +55,11 @@ class SearchService:
             date_to=date_to,
         )
 
-        scores = defaultdict(float)
-        matched_terms_by_document: dict[int, set[str]] = defaultdict(set)
-        for row in rows:
-            tf = row.tf or 0
-            idf = row.idf or 1
-            pos = row.posicao_inicial or 0
-            
-            # Base: TF-IDF
-            # Multiplicado por peso de posição (termos no início valem mais)
-            # Usamos 1 / sqrt(pos + 1) para um decaimento suave
-            position_weight = 1.0 / math.sqrt(pos + 1)
-            score = (tf * idf) * position_weight
-            
-            scores[row.document_id] += score
-            matched_terms_by_document[row.document_id].add(row.term)
-
-        # Bônus por cobertura de termos da consulta
-        total_query_terms = len(terms)
-        for doc_id in scores:
-            matches = len(matched_terms_by_document[doc_id])
-            coverage_bonus = 1.0 + (matches / total_query_terms)
-            scores[doc_id] *= coverage_bonus
-
-        ranked_docs = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+        ranked_items = self.ranking_strategy.rank(rows, terms)
+        ranked_docs = [
+            (item["document_id"], item["score"], item["matched_terms"])
+            for item in ranked_items
+        ]
         if sort_by == "data-desc":
             ranked_docs = self._sort_by_date(db, ranked_docs, reverse=True)
         elif sort_by == "data-asc":
@@ -91,14 +73,14 @@ class SearchService:
         top_score = ranked_docs[0][1] if ranked_docs else 0
         items = []
 
-        for doc_id, score in paginated:
+        for doc_id, score, matched_terms in paginated:
             payload = self.document_repository.get_document_payload(db, doc_id)
             if payload:
                 items.append(
                     {
                         "id": payload["id"],
                         "title": payload["title"],
-                        "snippet": self._build_snippet(payload["content"] or "", list(matched_terms_by_document[doc_id])),
+                        "snippet": self._build_snippet(payload["content"] or "", list(matched_terms)),
                         "category": payload["category"],
                         "type": payload["type"],
                         "date": (
@@ -154,16 +136,16 @@ class SearchService:
             return 0
         return min(max(int(round((score / top_score) * 100)), 1), 100)
 
-    def _sort_by_date(self, db: Session, ranked_docs: list[tuple[int, float]], *, reverse: bool) -> list[tuple[int, float]]:
-        def key_fn(item: tuple[int, float]):
+    def _sort_by_date(self, db: Session, ranked_docs: list[tuple[int, float, set[str]]], *, reverse: bool) -> list[tuple[int, float, set[str]]]:
+        def key_fn(item: tuple[int, float, set[str]]):
             payload = self.document_repository.get_document_payload(db, item[0])
             date_value = payload["document_date"] or payload["uploaded_at"]
             return date_value
 
         return sorted(ranked_docs, key=key_fn, reverse=reverse)
 
-    def _sort_by_title(self, db: Session, ranked_docs: list[tuple[int, float]]) -> list[tuple[int, float]]:
-        def key_fn(item: tuple[int, float]):
+    def _sort_by_title(self, db: Session, ranked_docs: list[tuple[int, float, set[str]]]) -> list[tuple[int, float, set[str]]]:
+        def key_fn(item: tuple[int, float, set[str]]):
             payload = self.document_repository.get_document_payload(db, item[0])
             return payload["title"].lower()
 
