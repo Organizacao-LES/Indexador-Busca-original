@@ -1,5 +1,5 @@
-# app/core/config.py
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,13 +20,25 @@ if ENV_FILE is not None:
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql://admin:admin@localhost:5432/ifesdoc"
+    # ── Variáveis separadas ───────────────────────────────
+    DATABASE_USER: str = "admin"
+    DATABASE_PASSWORD: str = "admin"
+    DATABASE_HOST: str = "localhost"
+    DATABASE_PORT: int = 5432
+    DATABASE_NAME: str = "ifesdoc"
+
+    # ── URL final (opcional override via .env) ────────────
+    DATABASE_URL: str | None = None
+
+    # ── Outras configs ────────────────────────────────────
     SECRET_KEY: str = "super-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     DOCUMENT_UPLOAD_DIR: str = "backend/storage/documents"
     DOCUMENT_MAX_FILE_SIZE_MB: int = 50
     DOCUMENT_ALLOWED_EXTENSIONS: list[str] = ["pdf", "docx", "txt", "csv"]
+
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",
@@ -39,6 +51,25 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def get_database_url(self) -> str:
+        """
+        Monta automaticamente a DATABASE_URL se não existir.
+
+        @return str: URL do banco pronta para SQLAlchemy
+        """
+        if self.DATABASE_URL:
+            # Corrige caso venha errado
+            if self.DATABASE_URL.startswith("postgres://"):
+                return self.DATABASE_URL.replace("postgres://", "postgresql://")
+            return self.DATABASE_URL
+
+        password = quote_plus(self.DATABASE_PASSWORD)
+
+        return (
+            f"postgresql://{self.DATABASE_USER}:{password}"
+            f"@{self.DATABASE_HOST}:{self.DATABASE_PORT}/{self.DATABASE_NAME}"
+        )
 
 
 settings = Settings()
