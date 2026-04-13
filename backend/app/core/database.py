@@ -7,6 +7,7 @@ from app.core.config import settings
 # The standard calling form is to send the URL <database_urls> as the first positional argument, usually a string that indicates database dialect and connection arguments:
 
 #     engine = create_engine("postgresql+psycopg2://scott:tiger@localhost/test")
+print(f"\t\n\n Creating database engine with URL: {settings.DATABASE_URL} \n\n")
 engine = create_engine(settings.DATABASE_URL)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
