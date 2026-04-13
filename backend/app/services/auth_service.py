@@ -37,6 +37,7 @@ class AuthService:
                 detail="Usuário inativo",
             )
 
+        print(f"new authenticate_user: {user}")
         return user
 
     @staticmethod
@@ -49,7 +50,8 @@ class AuthService:
                 "role": user.perfil,
             }
         )
-
+        print(f"Generated token for user {user.login}: {token}")
+        
         return {
             "id": user.cod_usuario,
             "name": user.nome,
