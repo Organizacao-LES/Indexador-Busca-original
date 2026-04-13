@@ -59,9 +59,23 @@ class SearchService:
         for row in rows:
             tf = row.tf or 0
             idf = row.idf or 1
-            score = tf * idf
+            pos = row.posicao_inicial or 0
+            
+            # Base: TF-IDF
+            # Multiplicado por peso de posição (termos no início valem mais)
+            # Usamos 1 / sqrt(pos + 1) para um decaimento suave
+            position_weight = 1.0 / math.sqrt(pos + 1)
+            score = (tf * idf) * position_weight
+            
             scores[row.document_id] += score
             matched_terms_by_document[row.document_id].add(row.term)
+
+        # Bônus por cobertura de termos da consulta
+        total_query_terms = len(terms)
+        for doc_id in scores:
+            matches = len(matched_terms_by_document[doc_id])
+            coverage_bonus = 1.0 + (matches / total_query_terms)
+            scores[doc_id] *= coverage_bonus
 
         ranked_docs = sorted(scores.items(), key=lambda item: item[1], reverse=True)
         if sort_by == "data-desc":
