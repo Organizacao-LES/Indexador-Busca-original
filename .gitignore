@@ -149,3 +149,4 @@ tests/.pytest_cache/
 *.crt
 *.p12
 *.secrets
+**/storage/**

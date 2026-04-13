@@ -4,15 +4,29 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(BASE_DIR / ".env")
+
+def _find_env_file() -> Path | None:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidate = parent / ".env"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+ENV_FILE = _find_env_file()
+if ENV_FILE is not None:
+    load_dotenv(ENV_FILE)
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://admin:admin@localhost:5432/ifesdoc"
     SECRET_KEY: str = "super-secret-key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    DOCUMENT_UPLOAD_DIR: str = "backend/storage/documents"
+    DOCUMENT_MAX_FILE_SIZE_MB: int = 50
+    DOCUMENT_ALLOWED_EXTENSIONS: list[str] = ["pdf", "docx", "txt", "csv"]
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",
@@ -21,7 +35,7 @@ class Settings(BaseSettings):
     ]
 
     model_config = SettingsConfigDict(
-        env_file=BASE_DIR / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )

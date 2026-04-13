@@ -1,0 +1,177 @@
+name: Docker Backend
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "backend/**"
+      - "docker/postgres/**"
+      - ".github/workflows/docker-backend.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "backend/**"
+      - "docker/postgres/**"
+
+jobs:
+  build-and-smoke:
+    name: Build & Smoke Test
+    runs-on: ubuntu-latest
+
+    # ── Postgres sobe em paralelo ao job ──────────────────────────────────────
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ifesdoc
+          POSTGRES_USER: IFESDOC
+          POSTGRES_PASSWORD: adminIfes
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U IFESDOC -d ifesdoc"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 15s
+
+    env:
+      # ── Database (variaveis separadas igual ao .env) ───────────────────────
+      DATABASE_USER: IFESDOC
+      DATABASE_PASSWORD: adminIfes
+      DATABASE_HOST: localhost
+      DATABASE_PORT: 5433
+
+      # ── Security ───────────────────────────────────────────────────────────
+      SECRET_KEY: ci_secret_key_nao_usar_em_prod
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      BACKEND_CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
+
+      # ── Environment ────────────────────────────────────────────────────────
+      ENVIRONMENT: ci
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Schema e seed no postgres ─────────────────────────────────────────
+      - name: Apply database schema and seed
+        run: |
+          echo "Aplicando schema..."
+          PGPASSWORD=$DATABASE_PASSWORD psql \
+            -h $DATABASE_HOST \
+            -p $DATABASE_PORT \
+            -U $DATABASE_USER \
+            -d ifesdoc \
+            -f docker/postgres/init/01_schema.sql
+
+          echo "Aplicando seed admin..."
+          PGPASSWORD=$DATABASE_PASSWORD psql \
+            -h $DATABASE_HOST \
+            -p $DATABASE_PORT \
+            -U $DATABASE_USER \
+            -d ifesdoc \
+            -f docker/postgres/init/02_admin.sql
+
+      # ── 3. Buildx com cache GHA ───────────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 4. Build — context = backend/ ────────────────────────────────────────
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.windows
+          push: false
+          load: true
+          tags: ifesdoc-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 5. Run — passa variaveis separadas igual ao .env ─────────────────────
+      - name: Run container
+        run: |
+          docker run -d \
+            --name backend_ci \
+            --network host \
+            -e DATABASE_USER="${DATABASE_USER}" \
+            -e DATABASE_PASSWORD="${DATABASE_PASSWORD}" \
+            -e DATABASE_HOST="${DATABASE_HOST}" \
+            -e DATABASE_PORT="${DATABASE_PORT}" \
+            -e SECRET_KEY="${SECRET_KEY}" \
+            -e ALGORITHM="${ALGORITHM}" \
+            -e ACCESS_TOKEN_EXPIRE_MINUTES="${ACCESS_TOKEN_EXPIRE_MINUTES}" \
+            -e BACKEND_CORS_ORIGINS="${BACKEND_CORS_ORIGINS}" \
+            -e ENVIRONMENT="${ENVIRONMENT}" \
+            ifesdoc-backend:ci
+
+      # ── 6. Aguarda API (max 60s) ──────────────────────────────────────────────
+      - name: Wait for API
+        run: |
+          echo "Aguardando API em http://localhost:8000 ..."
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:8000 > /dev/null 2>&1; then
+              echo "✅ API respondeu na tentativa $i"
+              exit 0
+            fi
+            echo "Tentativa $i/12 -- aguardando 5s..."
+            sleep 5
+          done
+          echo "❌ API nao respondeu em 60s"
+          docker logs backend_ci
+          exit 1
+
+      # ── 7. Smoke test raiz ────────────────────────────────────────────────────
+      - name: Smoke test GET /
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8000)
+          echo "HTTP status GET /: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Esperado 200, recebido $STATUS"
+            docker logs backend_ci
+            exit 1
+          fi
+          echo "✅ Raiz da API respondendo"
+
+      # ── 8. Smoke test login ───────────────────────────────────────────────────
+      - name: Smoke test POST /api/v1/auth/login
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST http://localhost:8000/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email": "admin@ifes.edu.br", "password": "admin123"}')
+
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "HTTP status: $STATUS"
+          echo "Body: $BODY"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Login falhou -- esperado 200, recebido $STATUS"
+            docker logs backend_ci
+            exit 1
+          fi
+
+          echo "$BODY" | grep -q "access_token" \
+            && echo "✅ JWT presente na resposta" \
+            || (echo "❌ access_token ausente" && exit 1)
+
+      # ── 9. Logs em caso de falha ──────────────────────────────────────────────
+      - name: Show logs on failure
+        if: failure()
+        run: docker logs backend_ci
+
+      # ── 10. Limpeza ───────────────────────────────────────────────────────────
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop backend_ci || true
+          docker rm   backend_ci || true

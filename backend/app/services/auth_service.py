@@ -1,16 +1,19 @@
 # app/services/auth_service.py
-from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.core.security import create_access_token, verify_password
+from app.domain.user_role import UserRole
 from app.repositories.user_repository import UserRepository
-from app.core.security import verify_password, create_access_token
 
 
 class AuthService:
-
     @staticmethod
     def _map_role(perfil: str) -> str:
-        return "Administrador" if perfil == "ADMIN" else "Usuário"
+        try:
+            return UserRole(perfil).label
+        except ValueError:
+            return perfil
 
     @staticmethod
     def authenticate_user(db: Session, identifier: str, password: str):
@@ -19,21 +22,22 @@ class AuthService:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário ou senha inválidos"
+                detail="Usuário ou senha inválidos",
             )
 
         if not verify_password(password, user.senha_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Usuário ou senha inválidos"
+                detail="Usuário ou senha inválidos",
             )
 
         if not user.ativo:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Usuário inativo"
+                detail="Usuário inativo",
             )
 
+        print(f"new authenticate_user: {user}")
         return user
 
     @staticmethod
@@ -43,10 +47,11 @@ class AuthService:
             data={
                 "sub": str(user.cod_usuario),
                 "login": user.login,
-                "role": user.perfil
+                "role": user.perfil,
             }
         )
-
+        print(f"Generated token for user {user.login}: {token}")
+        
         return {
             "id": user.cod_usuario,
             "name": user.nome,
@@ -56,5 +61,5 @@ class AuthService:
             "active": user.ativo,
             "token": token,
             "access_token": token,
-            "token_type": "bearer"
+            "token_type": "bearer",
         }

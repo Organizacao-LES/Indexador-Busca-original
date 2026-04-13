@@ -12,13 +12,8 @@ import type {
   SessionUser,
   UserSummary,
 } from "@/types/app";
-import sanitizeHtml from "sanitize-html";
-
 const stripHtml = (input: string): string =>
-  sanitizeHtml(input, {
-    allowedTags: [],
-    allowedAttributes: {},
-  });
+  input.replace(/<[^>]+>/g, "");
 
 export const mockUsers: UserSummary[] = [
   { id: 1, name: "Carlos Silva", login: "admin", email: "admin@ifes.edu.br", role: "Administrador", active: true },
@@ -93,6 +88,7 @@ export const mockDocuments: DocumentDetails[] = [
     indexedAt: "2025-08-12 14:32",
     size: "2.4 MB",
     downloadUrl: "#",
+    extractedCharacters: 2340,
     content: `Art. 1º Esta Resolução estabelece as normas gerais para o funcionamento dos cursos de graduação do Instituto Federal do Espírito Santo - IFES.
 
 Art. 2º A organização didático-pedagógica dos cursos de graduação observará os seguintes princípios:
