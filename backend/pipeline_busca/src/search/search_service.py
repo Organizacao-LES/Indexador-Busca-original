@@ -27,18 +27,20 @@ class SearchService:
         self.pipeline.add_stage(SearchIndexStage(self.repository))
         self.pipeline.add_stage(RankResultsStage())
 
-    def search(self, query: str):
+    def search(self, query: str, limit: int = 10):
 
         """
         Executa uma busca no sistema.
 
         :param query: consulta do usuário
+        :param limit: quantidade máxima de resultados
         :return: lista de documentos ordenados
         """
 
         # Executa o pipeline de busca
         result = self.pipeline.run({
-            "query": query
+            "query": query,
+            "limit": limit
         })
 
         # Retorna apenas os resultados

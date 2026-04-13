@@ -5,25 +5,32 @@ class RankResultsStage(PipelineStage):
 
     """
     Etapa responsável por ordenar os documentos
-    de acordo com a relevância.
+    de acordo com a relevância e limitar os resultados.
     """
-    
+
     def execute(self, context: dict) -> dict:
 
         # Recupera a lista de documentos encontrados
         documents = context.get("documents", [])
 
-        # Conta quantas vezes cada documento apareceu
+        # Recupera o limite de resultados (padrão 10)
+        limit = context.get("limit", 10)
+
+        # Conta quantas vezes cada documento apareceu (frequência do termo)
+        # Em um sistema real, aqui entrariam outros pesos (TF-IDF, posição, etc.)
         ranking = Counter(documents)
 
-        # Ordena os documentos pela frequência
+        # Ordena os documentos pela frequência (relevância simples)
         ordered_results = sorted(
             ranking.items(),
             key=lambda x: x[1],
             reverse=True
         )
 
-        # Salva os resultados ordenados
-        context["results"] = ordered_results
+        # Limita a quantidade de resultados retornados
+        limited_results = ordered_results[:limit]
+
+        # Salva os resultados ordenados e limitados
+        context["results"] = limited_results
 
         return context

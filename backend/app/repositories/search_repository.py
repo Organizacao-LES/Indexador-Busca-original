@@ -31,6 +31,7 @@ class SearchRepository:
                 Term.texto_termo.label("term"),
                 Term.idf.label("idf"),
                 InvertedIndex.tf.label("tf"),
+                InvertedIndex.posicao_inicial.label("posicao_inicial"),
             )
             .select_from(InvertedIndex)
             .join(Term, Term.cod_termo == InvertedIndex.cod_termo)
