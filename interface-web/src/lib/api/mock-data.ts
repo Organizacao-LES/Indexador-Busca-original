@@ -6,6 +6,7 @@ import type {
   IngestionBatchFile,
   IngestionHistoryEntry,
   MetricsSnapshot,
+  AppNotification,
   SearchHistoryItem,
   SearchResponse,
   SearchResult,
@@ -203,6 +204,42 @@ export const mockHistory: HistoryEntry[] = [
   { date: "2025-08-09 17:30", user: "admin@ifes.edu.br", action: "Ingestão", details: "Upload em lote: 5 arquivos processados (UC09)", status: "success" },
   { date: "2025-08-09 11:00", user: "admin@ifes.edu.br", action: "Ação Administrativa", details: "Usuário ana.costa inativado (UC05)", status: "warning" },
   { date: "2025-08-08 15:20", user: "admin@ifes.edu.br", action: "Reindexação", details: "Documento portaria_032.pdf reindexado (UC13)", status: "success" },
+];
+
+export const mockNotifications: AppNotification[] = [
+  {
+    id: 1,
+    userId: 1,
+    title: "Notificações ativas",
+    message: "O serviço de notificações do IFESDOC está em execução.",
+    type: "success",
+    origin: "ifesdoc-worker",
+    read: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    readAt: null,
+  },
+  {
+    id: 2,
+    userId: 1,
+    title: "Documento rejeitado",
+    message: "planilha_notas.csv: formato incompatível com o processo de indexação.",
+    type: "warning",
+    origin: "ifesdoc-worker",
+    read: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    readAt: null,
+  },
+  {
+    id: 3,
+    userId: 1,
+    title: "Reindexação concluída",
+    message: "A base de documentos foi reindexada com sucesso.",
+    type: "info",
+    origin: "admin:admin@ifes.edu.br",
+    read: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    readAt: new Date(Date.now() - 1000 * 60 * 80).toISOString(),
+  },
 ];
 
 export const defaultSettings: AppSettings = {

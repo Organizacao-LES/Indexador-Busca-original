@@ -23,6 +23,7 @@ from app.domain.ingestion_status import IngestionStatus
 from app.domain.inverted_index import InvertedIndex
 from app.domain.invalid_document import InvalidDocument
 from app.domain.document import Document
+from app.domain.notification import Notification
 from app.domain.search_history import SearchHistory
 from app.domain.term import Term
 from app.domain.user import User

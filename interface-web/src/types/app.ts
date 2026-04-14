@@ -202,6 +202,20 @@ export type HistoryEntry = {
   status: "success" | "error" | "info" | "warning";
 };
 
+export type NotificationType = "info" | "success" | "warning" | "error";
+
+export type AppNotification = {
+  id: number;
+  userId: number;
+  title: string;
+  message: string;
+  type: NotificationType;
+  origin: string;
+  read: boolean;
+  createdAt: string;
+  readAt?: string | null;
+};
+
 export type AppSettings = {
   instanceName: string;
   apiBaseUrl: string;

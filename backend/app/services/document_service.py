@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from datetime import date, datetime
 from mimetypes import guess_type
@@ -236,6 +237,31 @@ class DocumentService:
         media_type = guess_type(file_name)[0] or self._get_mime_type(payload["type"].lower())
         return file_path, file_name, media_type
 
+    def export_document(self, db: Session, *, document_id: int, export_format: str) -> tuple[str, str, str]:
+        payload = self.get_document_payload(db, document_id)
+        safe_title = self._safe_export_filename(payload["title"])
+
+        if export_format == "json":
+            content = json.dumps(
+                self.to_details_response(payload),
+                ensure_ascii=False,
+                indent=2,
+            )
+            return content, f"{safe_title}.json", "application/json; charset=utf-8"
+
+        metadata = [
+            f"Título: {payload['title']}",
+            f"Categoria: {payload['category']}",
+            f"Tipo: {payload['type']}",
+            f"Autor: {payload['author_name']}",
+            f"Versão: {payload['version']}",
+            f"Data do documento: {payload['document_date'] or payload['uploaded_at']}",
+            "",
+            "Conteúdo extraído:",
+            payload["content"] or "Pré-visualização indisponível para este formato.",
+        ]
+        return "\n".join(metadata), f"{safe_title}.txt", "text/plain; charset=utf-8"
+
     def reindex_document(self, db: Session, *, document_id: int, triggered_by: User) -> dict:
         return index_service.reindex_document(
             db,
@@ -252,6 +278,12 @@ class DocumentService:
     def to_upload_response(self, payload: dict) -> dict:
         document_date = payload["document_date"].date() if payload["document_date"] else None
         extracted_characters = len(payload["content"] or "")
+        file_path = Path(payload["file_path"])
+        download_url = (
+            f"/api/v1/documents/{payload['id']}/download"
+            if file_path.exists() and file_path.is_file()
+            else None
+        )
         return {
             "id": payload["id"],
             "title": payload["title"],
@@ -300,6 +332,12 @@ class DocumentService:
             else payload["uploaded_at"].isoformat()
         )
         extracted_characters = len(payload["content"] or "")
+        file_path = Path(payload["file_path"])
+        download_url = (
+            f"/api/v1/documents/{payload['id']}/download"
+            if file_path.exists() and file_path.is_file()
+            else None
+        )
         return {
             "id": payload["id"],
             "title": payload["title"],
@@ -312,7 +350,7 @@ class DocumentService:
             "version": int(payload["version"]),
             "indexedAt": payload["uploaded_at"].isoformat(),
             "size": self._format_size(payload["size_bytes"]),
-            "downloadUrl": f"/api/v1/documents/{payload['id']}/download",
+            "downloadUrl": download_url,
             "content": payload["content"] or "Pré-visualização indisponível para este formato.",
             "extractedCharacters": extracted_characters,
         }
@@ -399,6 +437,10 @@ class DocumentService:
 
     def _get_mime_type(self, extension: str) -> str:
         return self.adapter_registry.get(extension).mime_type
+
+    def _safe_export_filename(self, value: str) -> str:
+        safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value.strip())
+        return safe.strip("_") or "documento"
 
 
 document_service = DocumentService(DocumentRepository())

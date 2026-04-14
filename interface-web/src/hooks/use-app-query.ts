@@ -5,6 +5,7 @@ import {
   indexService,
   ingestionService,
   metricsService,
+  notificationService,
   searchService,
   settingsService,
   userService,
@@ -66,6 +67,14 @@ export const useHistory = () =>
   useQuery({
     queryKey: ["history"],
     queryFn: () => historyService.list(),
+  });
+
+export const useNotifications = (enabled = true) =>
+  useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationService.list(),
+    enabled,
+    refetchInterval: 30000,
   });
 
 export const useSettings = () =>

@@ -107,6 +107,26 @@ CREATE TABLE IF NOT EXISTS historico_administrativo (
         REFERENCES usuario (cod_usuario)
 );
 
+CREATE TABLE IF NOT EXISTS notificacao (
+    cod_notificacao BIGSERIAL PRIMARY KEY,
+    cod_usuario BIGINT NOT NULL,
+    titulo VARCHAR(120) NOT NULL,
+    mensagem TEXT NOT NULL,
+    tipo VARCHAR(30) NOT NULL DEFAULT 'info',
+    origem VARCHAR(80) NOT NULL DEFAULT 'ifesdoc',
+    lida BOOLEAN NOT NULL DEFAULT FALSE,
+    criada_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lida_em TIMESTAMP,
+    chave_dedupe VARCHAR(160),
+    CONSTRAINT fk_notificacao_usuario
+        FOREIGN KEY (cod_usuario)
+        REFERENCES usuario (cod_usuario),
+    CONSTRAINT chk_notificacao_tipo
+        CHECK (tipo IN ('info', 'success', 'warning', 'error')),
+    CONSTRAINT uq_notificacao_usuario_chave_dedupe
+        UNIQUE (cod_usuario, chave_dedupe)
+);
+
 CREATE TABLE IF NOT EXISTS historico_documento (
     cod_historico_documento BIGSERIAL PRIMARY KEY,
     cod_documento BIGINT NOT NULL,
@@ -248,6 +268,12 @@ CREATE INDEX IF NOT EXISTS idx_historico_administrativo_usuario
 CREATE INDEX IF NOT EXISTS idx_historico_administrativo_entidade
     ON historico_administrativo (entidade_tipo, cod_entidade);
 
+CREATE INDEX IF NOT EXISTS idx_notificacao_usuario_lida
+    ON notificacao (cod_usuario, lida, criada_em);
+
+CREATE INDEX IF NOT EXISTS idx_notificacao_criada_em
+    ON notificacao (criada_em);
+
 CREATE INDEX IF NOT EXISTS idx_historico_documento_documento
     ON historico_documento (cod_documento);
 
@@ -301,4 +327,3 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
 COMMIT;
-
