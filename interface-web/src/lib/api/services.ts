@@ -147,7 +147,7 @@ export const searchService = {
   async search(query: string, filters: SearchFilters = {}): Promise<SearchResponse> {
     if (shouldUseMocks()) {
       await delay();
-      return mockSearch(query, filters.page, filters.limit);
+      return mockSearch(query, filters.page, filters.limit, filters);
     }
 
     return apiRequest<SearchResponse>("/api/v1/search", {
@@ -301,10 +301,12 @@ export const ingestionService = {
       await delay(500);
       return {
         id: Date.now(),
-        title: payload.file.name.replace(/\.[^.]+$/, ""),
+        title: payload.title || payload.file.name.replace(/\.[^.]+$/, ""),
         fileName: payload.file.name,
         category: payload.category,
         type: payload.file.name.split(".").pop()?.toUpperCase() || "TXT",
+        documentType: payload.documentType || payload.file.name.split(".").pop()?.toUpperCase() || "TXT",
+        author: payload.author || "Administrador",
         mimeType: payload.file.type || "application/octet-stream",
         sizeBytes: payload.file.size,
         sizeLabel: `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`,
@@ -323,6 +325,15 @@ export const ingestionService = {
     formData.append("category", payload.category);
     if (payload.documentDate) {
       formData.append("document_date", payload.documentDate);
+    }
+    if (payload.title) {
+      formData.append("title", payload.title);
+    }
+    if (payload.author) {
+      formData.append("author", payload.author);
+    }
+    if (payload.documentType) {
+      formData.append("document_type", payload.documentType);
     }
 
     return apiRequest<UploadedDocument>("/api/v1/ingestion/upload", {
@@ -372,6 +383,12 @@ export const ingestionService = {
     formData.append("category", payload.category);
     if (payload.documentDate) {
       formData.append("document_date", payload.documentDate);
+    }
+    if (payload.author) {
+      formData.append("author", payload.author);
+    }
+    if (payload.documentType) {
+      formData.append("document_type", payload.documentType);
     }
 
     return apiRequest<BatchUploadResult>("/api/v1/ingestion/upload-batch", {

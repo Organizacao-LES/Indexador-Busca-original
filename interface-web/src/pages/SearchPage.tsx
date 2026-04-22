@@ -11,12 +11,34 @@ const SearchPage = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [category, setCategory] = useState("all");
+  const [documentType, setDocumentType] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState("relevancia");
+  const [limit, setLimit] = useState("20");
   const { data: recentSearches = [] } = useRecentSearches();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      navigate(`/resultados?q=${encodeURIComponent(query)}`);
+      const params = new URLSearchParams({ q: query.trim(), limit });
+      if (category !== "all") {
+        params.set("category", category);
+      }
+      if (documentType !== "all") {
+        params.set("documentType", documentType);
+      }
+      if (dateFrom) {
+        params.set("dateFrom", dateFrom);
+      }
+      if (dateTo) {
+        params.set("dateTo", dateTo);
+      }
+      if (sortBy !== "relevancia") {
+        params.set("sortBy", sortBy);
+      }
+      navigate(`/resultados?${params.toString()}`);
     }
   };
 
@@ -59,7 +81,7 @@ const SearchPage = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Categoria</Label>
-                <Select>
+                <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
@@ -72,29 +94,30 @@ const SearchPage = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Tipo de Documento</Label>
-                <Select>
+                <Select value={documentType} onValueChange={setDocumentType}>
                   <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pdf">PDF</SelectItem>
-                    <SelectItem value="txt">TXT</SelectItem>
-                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="PDF">PDF</SelectItem>
+                    <SelectItem value="DOCX">DOCX</SelectItem>
+                    <SelectItem value="TXT">TXT</SelectItem>
+                    <SelectItem value="CSV">CSV</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Período — De</Label>
-                <Input type="date" className="text-xs" />
+                <Input type="date" className="text-xs" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Período — Até</Label>
-                <Input type="date" className="text-xs" />
+                <Input type="date" className="text-xs" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Ordenar por</Label>
-                <Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-40"><SelectValue placeholder="Relevância" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="relevancia">Relevância</SelectItem>
@@ -106,7 +129,7 @@ const SearchPage = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Máx. resultados (UC22)</Label>
-                <Select defaultValue="20">
+                <Select value={limit} onValueChange={setLimit}>
                   <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="10">10</SelectItem>

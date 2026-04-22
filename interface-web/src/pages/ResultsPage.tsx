@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, FileText, Calendar, Tag, Eye, Download, SearchX, ChevronLeft, ChevronRight, FileJson } from "lucide-react";
+import { ArrowLeft, FileText, Calendar, Tag, Eye, Download, SearchX, ChevronLeft, ChevronRight, FileJson, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -25,12 +25,16 @@ const saveBlob = (content: string, filename: string, type: string) => {
 };
 
 const buildResultsCsv = (items: SearchResult[]) => {
-  const header = ["id", "titulo", "categoria", "tipo", "data", "relevancia", "trecho"];
+  const header = ["id", "titulo", "autor", "arquivo", "categoria", "tipo", "formato", "tamanho", "data", "relevancia", "trecho"];
   const rows = items.map((item) => [
     item.id,
     item.title,
+    item.author,
+    item.fileName,
     item.category,
+    item.documentType,
     item.type,
+    item.size,
     item.date,
     item.relevance,
     stripHtml(item.snippet),
@@ -48,6 +52,11 @@ const ResultsPage = () => {
   const filters = useMemo(() => ({
     page: currentPage,
     limit: Number(searchParams.get("limit") || "20"),
+    category: searchParams.get("category") || undefined,
+    documentType: searchParams.get("documentType") || undefined,
+    dateFrom: searchParams.get("dateFrom") || undefined,
+    dateTo: searchParams.get("dateTo") || undefined,
+    sortBy: searchParams.get("sortBy") || undefined,
   }), [currentPage, searchParams]);
   const { data, isLoading, isError, refetch } = useSearchResults(query, filters);
 
@@ -168,6 +177,14 @@ const ResultsPage = () => {
                         <Badge variant="secondary" className="text-xs px-2 py-0">{doc.category}</Badge>
                       </span>
                       <Badge variant="outline" className="text-xs px-2 py-0">{doc.type}</Badge>
+                      <span className="flex items-center gap-1">
+                        <FileText className="h-3 w-3" />
+                        {doc.documentType} · {doc.size}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {doc.author}
+                      </span>
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {new Date(doc.date).toLocaleDateString("pt-BR")}

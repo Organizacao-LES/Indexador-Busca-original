@@ -29,6 +29,11 @@ export type SearchResult = {
   snippet: string;
   category: string;
   type: string;
+  documentType: string;
+  author: string;
+  fileName: string;
+  mimeType: string;
+  size: string;
   date: string;
   relevance: number;
 };
@@ -50,15 +55,21 @@ export type SearchHistoryItem = {
 export type DocumentDetails = {
   id: number;
   title: string;
+  fileName: string;
   category: string;
   type: string;
+  documentType: string;
   date: string;
   author: string;
+  uploadedBy: string;
   format: string;
+  mimeType: string;
   pages: number;
   version: number;
   indexedAt: string;
+  sizeBytes: number;
   size: string;
+  hash: string;
   downloadUrl?: string;
   content: string;
   extractedCharacters: number;
@@ -82,12 +93,17 @@ export type DocumentUploadPayload = {
   file: File;
   category: string;
   documentDate?: string;
+  title?: string;
+  author?: string;
+  documentType?: string;
 };
 
 export type BatchUploadPayload = {
   files: File[];
   category: string;
   documentDate?: string;
+  author?: string;
+  documentType?: string;
 };
 
 export type UploadedDocument = {
@@ -96,6 +112,8 @@ export type UploadedDocument = {
   fileName: string;
   category: string;
   type: string;
+  documentType: string;
+  author: string;
   mimeType: string;
   sizeBytes: number;
   sizeLabel: string;

@@ -76,13 +76,19 @@ class SearchService:
         for doc_id, score, matched_terms in paginated:
             payload = self.document_repository.get_document_payload(db, doc_id)
             if payload:
+                snippet_source = self._searchable_result_text(payload)
                 items.append(
                     {
                         "id": payload["id"],
                         "title": payload["title"],
-                        "snippet": self._build_snippet(payload["content"] or "", list(matched_terms)),
+                        "snippet": self._build_snippet(snippet_source, list(matched_terms)),
                         "category": payload["category"],
                         "type": payload["type"],
+                        "documentType": payload["document_type"],
+                        "author": payload["author_name"],
+                        "fileName": payload["file_name"],
+                        "mimeType": payload["mime_type"] or "",
+                        "size": self._format_size(payload["size_bytes"]),
                         "date": (
                             payload["document_date"].isoformat()
                             if payload["document_date"]
@@ -131,10 +137,28 @@ class SearchService:
             snippet = snippet.replace(term.capitalize(), f"<mark>{term.capitalize()}</mark>")
         return snippet
 
+    def _searchable_result_text(self, payload: dict) -> str:
+        values = [
+            payload.get("title"),
+            payload.get("author_name"),
+            payload.get("category"),
+            payload.get("document_type"),
+            payload.get("file_name"),
+            payload.get("content"),
+        ]
+        return "\n".join(str(value) for value in values if value)
+
     def _normalize_relevance(self, score: float, top_score: float) -> int:
         if top_score <= 0:
             return 0
         return min(max(int(round((score / top_score) * 100)), 1), 100)
+
+    def _format_size(self, size_bytes: int) -> str:
+        if size_bytes < 1024:
+            return f"{size_bytes} B"
+        if size_bytes < 1024 * 1024:
+            return f"{size_bytes / 1024:.1f} KB"
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
 
     def _sort_by_date(self, db: Session, ranked_docs: list[tuple[int, float, set[str]]], *, reverse: bool) -> list[tuple[int, float, set[str]]]:
         def key_fn(item: tuple[int, float, set[str]]):

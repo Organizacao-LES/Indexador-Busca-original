@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import time
 from datetime import date, datetime
 from mimetypes import guess_type
@@ -15,6 +16,7 @@ from app.core.config import settings
 from app.domain.document import Document
 from app.domain.document_category import DocumentCategory
 from app.domain.document_history import DocumentHistory
+from app.domain.document_metadata import DocumentMetadata
 from app.domain.ingestion_history import IngestionHistory
 from app.domain.ingestion_status import IngestionStatus
 from app.domain.invalid_document import InvalidDocument
@@ -46,6 +48,9 @@ class DocumentService:
         category: str,
         uploaded_by: User,
         document_date: date | None = None,
+        title: str | None = None,
+        author: str | None = None,
+        document_type: str | None = None,
     ) -> dict:
         started_at = time.perf_counter()
         filename = file.filename or ""
@@ -69,19 +74,56 @@ class DocumentService:
             file.file.close()
 
         storage_path = self._store_file(content, extension)
-        title = Path(filename).stem or f"documento-{uuid4().hex[:8]}"
+        document_title = self._normalize_metadata_value(
+            title,
+            fallback=Path(filename).stem or f"documento-{uuid4().hex[:8]}",
+            max_length=255,
+        )
+        document_author = self._normalize_metadata_value(
+            author,
+            fallback=uploaded_by.nome,
+            max_length=255,
+        )
+        metadata_document_type = self._normalize_metadata_value(
+            document_type,
+            fallback=extension.upper(),
+            max_length=100,
+        )
+        original_file_name = self._normalize_metadata_value(
+            filename,
+            fallback=f"{document_title}.{extension}",
+            max_length=255,
+        )
+        mime_type = self._normalize_metadata_value(
+            file.content_type,
+            fallback=adapter.mime_type,
+            max_length=255,
+        )
+        file_hash = hashlib.sha256(content).hexdigest()
         category_row = self._get_or_create_category(db, normalized_category)
         processing_status = self._get_or_create_status(db, "processando")
 
         document = Document(
             cod_categoria=category_row.cod_categoria,
-            titulo=title,
+            titulo=document_title,
             tipo=extension.upper(),
             data_publicacao=self._coerce_document_datetime(document_date),
             ativo=True,
             cod_usuario_criador=uploaded_by.cod_usuario,
         )
         db.add(document)
+        db.flush()
+
+        metadata = DocumentMetadata(
+            cod_documento=document.cod_documento,
+            autor=document_author,
+            tipo_documento=metadata_document_type,
+            nome_arquivo_original=original_file_name,
+            mime_type=mime_type,
+            tamanho_bytes=len(content),
+            hash_arquivo=file_hash,
+        )
+        db.add(metadata)
         db.flush()
 
         history_document = DocumentHistory(
@@ -132,7 +174,7 @@ class DocumentService:
         administrative_history_service.log_action(
             db,
             actor=uploaded_by,
-            description=f"Upload do documento {title}.{extension} concluído.",
+            description=f"Upload do documento {document_title}.{extension} concluído.",
             action_type="Ingestão",
             entity_type="documento",
             entity_id=document.cod_documento,
@@ -148,6 +190,8 @@ class DocumentService:
         category: str,
         uploaded_by: User,
         document_date: date | None = None,
+        author: str | None = None,
+        document_type: str | None = None,
     ) -> dict:
         items: list[dict] = []
         success_count = 0
@@ -160,6 +204,8 @@ class DocumentService:
                     category=category,
                     uploaded_by=uploaded_by,
                     document_date=document_date,
+                    author=author,
+                    document_type=document_type,
                 )
                 items.append(
                     {
@@ -234,7 +280,7 @@ class DocumentService:
             raise DocumentNotFoundException("Arquivo físico do documento não encontrado.")
 
         file_name = payload["file_name"]
-        media_type = guess_type(file_name)[0] or self._get_mime_type(payload["type"].lower())
+        media_type = payload["mime_type"] or guess_type(file_name)[0] or self._get_mime_type(payload["type"].lower())
         return file_path, file_name, media_type
 
     def export_document(self, db: Session, *, document_id: int, export_format: str) -> tuple[str, str, str]:
@@ -252,8 +298,13 @@ class DocumentService:
         metadata = [
             f"Título: {payload['title']}",
             f"Categoria: {payload['category']}",
-            f"Tipo: {payload['type']}",
+            f"Tipo documental: {payload['document_type']}",
+            f"Formato: {payload['type']}",
             f"Autor: {payload['author_name']}",
+            f"Enviado por: {payload['uploaded_by_name']}",
+            f"Arquivo original: {payload['file_name']}",
+            f"MIME: {payload['mime_type'] or self._get_mime_type(payload['type'].lower())}",
+            f"Hash SHA-256: {payload['file_hash']}",
             f"Versão: {payload['version']}",
             f"Data do documento: {payload['document_date'] or payload['uploaded_at']}",
             "",
@@ -290,14 +341,16 @@ class DocumentService:
             "fileName": payload["file_name"],
             "category": payload["category"],
             "type": payload["type"],
-            "mimeType": self._get_mime_type(payload["type"].lower()),
+            "documentType": payload["document_type"],
+            "author": payload["author_name"],
+            "mimeType": payload["mime_type"] or self._get_mime_type(payload["type"].lower()),
             "sizeBytes": payload["size_bytes"],
             "sizeLabel": self._format_size(payload["size_bytes"]),
             "date": document_date,
             "uploadedAt": payload["uploaded_at"],
             "validated": True,
             "integrityOk": True,
-            "hash": "",
+            "hash": payload["file_hash"],
             "extracted": True,
             "extractedCharacters": extracted_characters,
         }
@@ -341,18 +394,48 @@ class DocumentService:
         return {
             "id": payload["id"],
             "title": payload["title"],
+            "fileName": payload["file_name"],
             "category": payload["category"],
             "type": payload["type"],
+            "documentType": payload["document_type"],
             "date": document_date,
             "author": payload["author_name"],
+            "uploadedBy": payload["uploaded_by_name"],
             "format": payload["type"],
+            "mimeType": payload["mime_type"] or self._get_mime_type(payload["type"].lower()),
             "pages": 1,
             "version": int(payload["version"]),
             "indexedAt": payload["uploaded_at"].isoformat(),
+            "sizeBytes": payload["size_bytes"],
             "size": self._format_size(payload["size_bytes"]),
+            "hash": payload["file_hash"],
             "downloadUrl": download_url,
             "content": payload["content"] or "Pré-visualização indisponível para este formato.",
             "extractedCharacters": extracted_characters,
+        }
+
+    def to_metadata_response(self, payload: dict) -> dict:
+        document_date = (
+            payload["document_date"].isoformat()
+            if payload["document_date"]
+            else None
+        )
+        return {
+            "id": payload["id"],
+            "title": payload["title"],
+            "author": payload["author_name"],
+            "uploadedBy": payload["uploaded_by_name"],
+            "category": payload["category"],
+            "documentType": payload["document_type"],
+            "fileFormat": payload["type"],
+            "fileName": payload["file_name"],
+            "mimeType": payload["mime_type"] or self._get_mime_type(payload["type"].lower()),
+            "sizeBytes": payload["size_bytes"],
+            "sizeLabel": self._format_size(payload["size_bytes"]),
+            "hash": payload["file_hash"],
+            "publicationDate": document_date,
+            "uploadedAt": payload["uploaded_at"],
+            "version": int(payload["version"]),
         }
 
     def _get_or_create_category(self, db: Session, category_name: str) -> DocumentCategory:
@@ -441,6 +524,16 @@ class DocumentService:
     def _safe_export_filename(self, value: str) -> str:
         safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value.strip())
         return safe.strip("_") or "documento"
+
+    def _normalize_metadata_value(
+        self,
+        value: str | None,
+        *,
+        fallback: str,
+        max_length: int,
+    ) -> str:
+        normalized = (value or "").strip() or fallback.strip()
+        return normalized[:max_length]
 
 
 document_service = DocumentService(DocumentRepository())

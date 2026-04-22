@@ -16,6 +16,7 @@ from app.domain.administrative_history import AdministrativeHistory
 from app.domain.document_category import DocumentCategory
 from app.domain.document_field import DocumentField
 from app.domain.document_history import DocumentHistory
+from app.domain.document_metadata import DocumentMetadata
 from app.domain.field_type import FieldType
 from app.domain.index_history import IndexHistory
 from app.domain.ingestion_history import IngestionHistory

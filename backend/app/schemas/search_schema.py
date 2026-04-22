@@ -7,6 +7,11 @@ class SearchResultResponse(BaseModel):
     snippet: str
     category: str
     type: str
+    documentType: str
+    author: str
+    fileName: str
+    mimeType: str
+    size: str
     date: str
     relevance: int
 

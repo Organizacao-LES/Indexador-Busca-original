@@ -20,6 +20,8 @@ const statusMap = {
   error: { label: "Falha", variant: "destructive" as const, color: "text-destructive" },
 };
 
+const documentTypeOptions = ["Edital", "Portaria", "Resolução", "Relatório", "Ata", "Contrato", "Plano", "Outro"];
+
 const IngestionPage = () => {
   const batchQuery = useIngestionBatch();
   const historyQuery = useIngestionHistory();
@@ -34,6 +36,11 @@ const IngestionPage = () => {
   const [batchCategory, setBatchCategory] = useState("");
   const [documentDate, setDocumentDate] = useState("");
   const [batchDocumentDate, setBatchDocumentDate] = useState("");
+  const [documentTitle, setDocumentTitle] = useState("");
+  const [documentAuthor, setDocumentAuthor] = useState("");
+  const [documentType, setDocumentType] = useState("");
+  const [batchAuthor, setBatchAuthor] = useState("");
+  const [batchDocumentType, setBatchDocumentType] = useState("");
   const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
   const [batchResult, setBatchResult] = useState<BatchUploadResult | null>(null);
   const [step, setStep] = useState<"idle" | "uploading" | "validated" | "done">("idle");
@@ -112,6 +119,9 @@ const IngestionPage = () => {
       file: selectedFile,
       category,
       documentDate: documentDate || undefined,
+      title: documentTitle || undefined,
+      author: documentAuthor || undefined,
+      documentType: documentType || undefined,
     });
   };
 
@@ -120,6 +130,9 @@ const IngestionPage = () => {
     setUploadedDocument(null);
     setCategory("");
     setDocumentDate("");
+    setDocumentTitle("");
+    setDocumentAuthor("");
+    setDocumentType("");
     setStep("idle");
     if (inputRef.current) {
       inputRef.current.value = "";
@@ -140,6 +153,8 @@ const IngestionPage = () => {
       files: batchFiles,
       category: batchCategory,
       documentDate: batchDocumentDate || undefined,
+      author: batchAuthor || undefined,
+      documentType: batchDocumentType || undefined,
     });
   };
 
@@ -147,6 +162,8 @@ const IngestionPage = () => {
     setBatchFiles([]);
     setBatchCategory("");
     setBatchDocumentDate("");
+    setBatchAuthor("");
+    setBatchDocumentType("");
     setBatchResult(null);
     if (batchInputRef.current) {
       batchInputRef.current.value = "";
@@ -246,6 +263,33 @@ const IngestionPage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Título do documento</Label>
+              <Input
+                value={documentTitle}
+                onChange={(e) => setDocumentTitle(e.target.value)}
+                placeholder={selectedFile ? selectedFile.name.replace(/\.[^.]+$/, "") : "Ex.: Portaria de comissão avaliadora"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Autor</Label>
+              <Input
+                value={documentAuthor}
+                onChange={(e) => setDocumentAuthor(e.target.value)}
+                placeholder="Ex.: Conselho Superior"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tipo documental</Label>
+              <Select value={documentType} onValueChange={setDocumentType}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {documentTypeOptions.map((option) => (
+                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Categoria</Label>
               <Select value={category} onValueChange={setCategory}>
@@ -291,6 +335,9 @@ const IngestionPage = () => {
                   {uploadedDocument?.fileName} armazenado com validação concluída, texto extraído e metadados registrados.
                 </p>
                 <p className="text-xs text-muted-foreground">
+                  {uploadedDocument?.title} · {uploadedDocument?.author} · {uploadedDocument?.documentType}
+                </p>
+                <p className="text-xs text-muted-foreground">
                   {uploadedDocument?.extractedCharacters ?? 0} caracteres extraídos para processamento e indexação.
                 </p>
               </div>
@@ -328,6 +375,25 @@ const IngestionPage = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Autor do lote</Label>
+              <Input
+                value={batchAuthor}
+                onChange={(e) => setBatchAuthor(e.target.value)}
+                placeholder="Ex.: Diretoria de Ensino"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tipo documental do lote</Label>
+              <Select value={batchDocumentType} onValueChange={setBatchDocumentType}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {documentTypeOptions.map((option) => (
+                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label>Categoria do lote</Label>
               <Select value={batchCategory} onValueChange={setBatchCategory}>

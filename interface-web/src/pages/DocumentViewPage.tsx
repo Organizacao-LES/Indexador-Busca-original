@@ -212,7 +212,7 @@ const DocumentViewPage = () => {
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileText className="h-3.5 w-3.5" />
-              {document.format} · {document.pages} páginas · {document.size}
+              {document.documentType} · {document.format} · {document.size}
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mt-3">
@@ -226,7 +226,25 @@ const DocumentViewPage = () => {
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileText className="h-3.5 w-3.5" />
+              {document.fileName}
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <User className="h-3.5 w-3.5" />
+              Enviado por {document.uploadedBy}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm mt-3">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
+              {document.mimeType}
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" />
               {document.extractedCharacters} caracteres extraídos
+            </div>
+            <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+              <Hash className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate" title={document.hash}>{document.hash}</span>
             </div>
             {currentResultIndex >= 0 && (
               <div className="flex items-center gap-2 text-muted-foreground">

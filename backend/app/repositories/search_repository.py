@@ -6,6 +6,7 @@ from app.domain.document_field import DocumentField
 from app.domain.inverted_index import InvertedIndex
 from app.domain.document import Document
 from app.domain.document_history import DocumentHistory
+from app.domain.document_metadata import DocumentMetadata
 from app.domain.search_history import SearchHistory
 from app.domain.term import Term
 
@@ -26,6 +27,7 @@ class SearchRepository:
                 Document.cod_documento.label("document_id"),
                 Document.titulo.label("title"),
                 Document.tipo.label("document_type"),
+                DocumentMetadata.tipo_documento.label("metadata_document_type"),
                 Document.data_publicacao.label("document_date"),
                 DocumentCategory.nome_categoria.label("category"),
                 Term.texto_termo.label("term"),
@@ -45,6 +47,7 @@ class SearchRepository:
             )
             .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
             .join(DocumentCategory, DocumentCategory.cod_categoria == Document.cod_categoria)
+            .outerjoin(DocumentMetadata, DocumentMetadata.cod_documento == Document.cod_documento)
             .filter(Term.texto_termo.in_(terms))
             .filter(Document.ativo.is_(True))
             .filter(DocumentHistory.versao_ativa.is_(True))
@@ -53,7 +56,10 @@ class SearchRepository:
         if category:
             query = query.filter(DocumentCategory.nome_categoria.ilike(category))
         if document_type:
-            query = query.filter(Document.tipo.ilike(document_type))
+            query = query.filter(
+                (Document.tipo.ilike(document_type))
+                | (DocumentMetadata.tipo_documento.ilike(document_type))
+            )
         if date_from:
             query = query.filter(Document.data_publicacao >= date_from)
         if date_to:

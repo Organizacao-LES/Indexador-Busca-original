@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.domain.user import User
 from app.domain.user_role import UserRole
-from app.schemas.document_schema import DocumentDetailsResponse
+from app.schemas.document_schema import DocumentDetailsResponse, DocumentMetadataResponse
 from app.schemas.index_schema import ReindexResponse
 from app.services.document_service import document_service
 
@@ -21,6 +21,16 @@ def get_document(
 ):
     payload = document_service.get_document_payload(db, document_id)
     return document_service.to_details_response(payload)
+
+
+@router.get("/{document_id}/metadata", response_model=DocumentMetadataResponse)
+def get_document_metadata(
+    document_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    payload = document_service.get_document_payload(db, document_id)
+    return document_service.to_metadata_response(payload)
 
 
 @router.get("/{document_id}/download")
