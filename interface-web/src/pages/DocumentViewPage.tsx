@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { documentService } from "@/lib/api/services";
 import { PageError, PageLoader } from "@/components/PageState";
@@ -43,6 +44,7 @@ const DocumentViewPage = () => {
   const location = useLocation();
   const { id } = useParams();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [reindexing, setReindexing] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const documentId = Number(id);
@@ -59,9 +61,16 @@ const DocumentViewPage = () => {
     setReindexing(true);
     try {
       await documentService.reindex(documentId);
+      await refetch();
       toast({
         title: "Documento reindexado",
         description: "O documento foi reprocessado e o índice foi atualizado com sucesso (UC13).",
+      });
+    } catch {
+      toast({
+        title: "Falha na reindexação",
+        description: "Não foi possível reindexar o documento.",
+        variant: "destructive",
       });
     } finally {
       setReindexing(false);
@@ -164,15 +173,17 @@ const DocumentViewPage = () => {
               </Button>
             </div>
           )}
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={handleReindex}
-            disabled={reindexing}
-          >
-            <RefreshCw className={`h-4 w-4 ${reindexing ? "animate-spin" : ""}`} />
-            {reindexing ? "Reindexando..." : "Reindexar (Admin)"}
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleReindex}
+              disabled={reindexing}
+            >
+              <RefreshCw className={`h-4 w-4 ${reindexing ? "animate-spin" : ""}`} />
+              {reindexing ? "Reindexando..." : "Reindexar (Admin)"}
+            </Button>
+          )}
           <Button variant="outline" className="gap-2" onClick={() => handleExport("txt")} disabled={!!exporting}>
             <FileText className="h-4 w-4" />
             TXT
