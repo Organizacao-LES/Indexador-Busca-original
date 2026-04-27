@@ -1,3 +1,4 @@
+from datetime import date, datetime, time as dt_time
 import math
 import time
 
@@ -5,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.search_repository import SearchRepository
+from app.domain.user import User
 from app.strategies.search_ranking_strategy import SearchRankingStrategy
 from app.utils.text_processing import preprocess_for_indexing
 
@@ -25,8 +27,9 @@ class SearchService:
         page: int = 1,
         category: str | None = None,
         document_type: str | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
+        author: str | None = None,
+        date_from: date | str | None = None,
+        date_to: date | str | None = None,
         sort_by: str | None = None,
     ) -> dict:
         started_at = time.perf_counter()
@@ -40,19 +43,29 @@ class SearchService:
                 db,
                 user_id=user_id,
                 query=query,
-                filters=self._serialize_filters(category, document_type, date_from, date_to, sort_by),
+                filters=self._serialize_filters(
+                    category,
+                    document_type,
+                    author,
+                    date_from,
+                    date_to,
+                    sort_by,
+                ),
                 result_count=0,
                 started_at=started_at,
             )
             return response
 
+        normalized_date_from = self._coerce_date_boundary(date_from, end_of_day=False)
+        normalized_date_to = self._coerce_date_boundary(date_to, end_of_day=True)
         rows = self.repository.search_terms(
             db,
             terms=terms,
             category=category,
             document_type=document_type,
-            date_from=date_from,
-            date_to=date_to,
+            author=author,
+            date_from=normalized_date_from,
+            date_to=normalized_date_to,
         )
 
         ranked_items = self.ranking_strategy.rank(rows, terms)
@@ -110,7 +123,14 @@ class SearchService:
             db,
             user_id=user_id,
             query=query,
-            filters=self._serialize_filters(category, document_type, date_from, date_to, sort_by),
+            filters=self._serialize_filters(
+                category,
+                document_type,
+                author,
+                date_from,
+                date_to,
+                sort_by,
+            ),
             result_count=len(ranked_docs),
             started_at=started_at,
         )
@@ -128,6 +148,49 @@ class SearchService:
             }
             for row in rows
         ]
+
+    def list_search_history(
+        self,
+        db: Session,
+        *,
+        current_user: User,
+        limit: int = 20,
+        page: int = 1,
+        query: str | None = None,
+        performed_from: date | str | None = None,
+        performed_to: date | str | None = None,
+    ) -> dict:
+        normalized_from = self._coerce_date_boundary(performed_from, end_of_day=False)
+        normalized_to = self._coerce_date_boundary(performed_to, end_of_day=True)
+        rows, total = self.repository.list_search_history(
+            db,
+            user_id=current_user.cod_usuario,
+            query_text=query,
+            performed_from=normalized_from,
+            performed_to=normalized_to,
+            limit=limit,
+            page=page,
+        )
+
+        items = [
+            {
+                "id": row.cod_historico_busca,
+                "query": row.consulta_texto,
+                "createdAt": row.criado_em.isoformat() if row.criado_em else "",
+                "resultCount": int(row.quantidade_resultados or 0),
+                "responseTimeMs": int(row.tempo_resposta_ms or 0),
+                "user": current_user.email,
+                "filters": self._deserialize_filters(row.filtros),
+            }
+            for row in rows
+        ]
+        return {
+            "total": total,
+            "page": page,
+            "perPage": limit,
+            "totalPages": max(math.ceil(total / limit), 1),
+            "items": items,
+        }
 
     def _build_snippet(self, content: str, matched_terms: list[str]) -> str:
         snippet = (content or "").strip().replace("\n", " ")
@@ -198,19 +261,63 @@ class SearchService:
         self,
         category: str | None,
         document_type: str | None,
-        date_from: str | None,
-        date_to: str | None,
+        author: str | None,
+        date_from: date | str | None,
+        date_to: date | str | None,
         sort_by: str | None,
     ) -> str | None:
         filters = {
             "category": category,
             "documentType": document_type,
-            "dateFrom": date_from,
-            "dateTo": date_to,
+            "author": author,
+            "dateFrom": self._stringify_date_filter(date_from),
+            "dateTo": self._stringify_date_filter(date_to),
             "sortBy": sort_by,
         }
         filtered_items = [f"{key}={value}" for key, value in filters.items() if value]
         return ";".join(filtered_items) if filtered_items else None
+
+    def _deserialize_filters(self, serialized_filters: str | None) -> dict:
+        filters = {
+            "category": None,
+            "documentType": None,
+            "author": None,
+            "dateFrom": None,
+            "dateTo": None,
+            "sortBy": None,
+        }
+        if not serialized_filters:
+            return filters
+
+        for item in serialized_filters.split(";"):
+            if "=" not in item:
+                continue
+            key, value = item.split("=", 1)
+            if key in filters and value:
+                filters[key] = value
+        return filters
+
+    def _coerce_date_boundary(
+        self,
+        value: date | str | None,
+        *,
+        end_of_day: bool,
+    ) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            value = date.fromisoformat(value)
+        boundary_time = dt_time.max if end_of_day else dt_time.min
+        return datetime.combine(value, boundary_time)
+
+    def _stringify_date_filter(self, value: date | str | None) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return value
+        return value.isoformat()
 
     def _empty_response(self, *, query: str, page: int, per_page: int) -> dict:
         return {

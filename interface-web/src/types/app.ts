@@ -16,6 +16,7 @@ export type SessionUser = UserSummary & {
 export type SearchFilters = {
   category?: string;
   documentType?: string;
+  author?: string;
   dateFrom?: string;
   dateTo?: string;
   sortBy?: string;
@@ -50,6 +51,41 @@ export type SearchResponse = {
 export type SearchHistoryItem = {
   id: number;
   term: string;
+};
+
+export type SearchHistoryFilters = {
+  query?: string;
+  performedFrom?: string;
+  performedTo?: string;
+  limit?: number;
+  page?: number;
+};
+
+export type SearchHistoryAppliedFilters = {
+  category?: string | null;
+  documentType?: string | null;
+  author?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  sortBy?: string | null;
+};
+
+export type SearchHistoryEntry = {
+  id: number;
+  query: string;
+  createdAt: string;
+  resultCount: number;
+  responseTimeMs: number;
+  user: string;
+  filters: SearchHistoryAppliedFilters;
+};
+
+export type SearchHistoryResponse = {
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+  items: SearchHistoryEntry[];
 };
 
 export type DocumentDetails = {

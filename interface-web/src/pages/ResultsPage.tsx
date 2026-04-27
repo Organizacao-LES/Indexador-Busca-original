@@ -12,6 +12,19 @@ const csvEscape = (value: string | number) => `"${String(value).replace(/"/g, '"
 
 const stripHtml = (value: string) => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
+const formatSortLabel = (value: string) => {
+  switch (value) {
+    case "data-desc":
+      return "Data mais recente";
+    case "data-asc":
+      return "Data mais antiga";
+    case "titulo":
+      return "Título (A-Z)";
+    default:
+      return value;
+  }
+};
+
 const saveBlob = (content: string, filename: string, type: string) => {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -54,6 +67,7 @@ const ResultsPage = () => {
     limit: Number(searchParams.get("limit") || "20"),
     category: searchParams.get("category") || undefined,
     documentType: searchParams.get("documentType") || undefined,
+    author: searchParams.get("author") || undefined,
     dateFrom: searchParams.get("dateFrom") || undefined,
     dateTo: searchParams.get("dateTo") || undefined,
     sortBy: searchParams.get("sortBy") || undefined,
@@ -129,6 +143,16 @@ const ResultsPage = () => {
                 <>Nenhum resultado para "<span className="font-medium text-foreground">{query}</span>"</>
               )}
             </p>
+            {(filters.category || filters.documentType || filters.author || filters.dateFrom || filters.dateTo || filters.sortBy) && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {filters.category && <Badge variant="secondary">Categoria: {filters.category}</Badge>}
+                {filters.documentType && <Badge variant="secondary">Tipo/Formato: {filters.documentType}</Badge>}
+                {filters.author && <Badge variant="secondary">Autor: {filters.author}</Badge>}
+                {filters.dateFrom && <Badge variant="outline">Publicado após: {filters.dateFrom}</Badge>}
+                {filters.dateTo && <Badge variant="outline">Publicado até: {filters.dateTo}</Badge>}
+                {filters.sortBy && filters.sortBy !== "relevancia" && <Badge variant="outline">Ordenação: {formatSortLabel(filters.sortBy)}</Badge>}
+              </div>
+            )}
           </div>
         </div>
         {hasResults && (

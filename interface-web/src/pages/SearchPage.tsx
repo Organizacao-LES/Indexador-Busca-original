@@ -12,7 +12,8 @@ const SearchPage = () => {
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [category, setCategory] = useState("all");
-  const [documentType, setDocumentType] = useState("all");
+  const [documentType, setDocumentType] = useState("");
+  const [author, setAuthor] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState("relevancia");
@@ -26,8 +27,11 @@ const SearchPage = () => {
       if (category !== "all") {
         params.set("category", category);
       }
-      if (documentType !== "all") {
-        params.set("documentType", documentType);
+      if (documentType.trim()) {
+        params.set("documentType", documentType.trim());
+      }
+      if (author.trim()) {
+        params.set("author", author.trim());
       }
       if (dateFrom) {
         params.set("dateFrom", dateFrom);
@@ -78,7 +82,7 @@ const SearchPage = () => {
         {showFilters && (
           <div className="glass-card p-5 space-y-4 animate-fade-in">
             <h3 className="text-sm font-semibold text-foreground">Filtros Avançados (UC23)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Categoria</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -93,17 +97,22 @@ const SearchPage = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Tipo de Documento</Label>
-                <Select value={documentType} onValueChange={setDocumentType}>
-                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="PDF">PDF</SelectItem>
-                    <SelectItem value="DOCX">DOCX</SelectItem>
-                    <SelectItem value="TXT">TXT</SelectItem>
-                    <SelectItem value="CSV">CSV</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Tipo ou Formato</Label>
+                <Input
+                  value={documentType}
+                  onChange={(event) => setDocumentType(event.target.value)}
+                  placeholder="Ex.: Resolução, Edital, PDF"
+                  className="text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Autor</Label>
+                <Input
+                  value={author}
+                  onChange={(event) => setAuthor(event.target.value)}
+                  placeholder="Ex.: Conselho Superior"
+                  className="text-xs"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Período — De</Label>

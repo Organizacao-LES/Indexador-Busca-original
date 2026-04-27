@@ -10,7 +10,7 @@ import {
   settingsService,
   userService,
 } from "@/lib/api/services";
-import type { SearchFilters } from "@/types/app";
+import type { SearchFilters, SearchHistoryFilters } from "@/types/app";
 
 export const useRecentSearches = () =>
   useQuery({
@@ -23,6 +23,12 @@ export const useSearchResults = (query: string, filters: SearchFilters) =>
     queryKey: ["search-results", query, filters],
     queryFn: () => searchService.search(query, filters),
     enabled: !!query.trim(),
+  });
+
+export const useSearchHistory = (filters: SearchHistoryFilters) =>
+  useQuery({
+    queryKey: ["search-history", filters],
+    queryFn: () => searchService.history(filters),
   });
 
 export const useDocument = (id: number) =>
@@ -63,10 +69,11 @@ export const useMetrics = () =>
     queryFn: () => metricsService.snapshot(),
   });
 
-export const useHistory = () =>
+export const useHistory = (enabled = true) =>
   useQuery({
     queryKey: ["history"],
     queryFn: () => historyService.list(),
+    enabled,
   });
 
 export const useNotifications = (enabled = true) =>

@@ -7,6 +7,9 @@ import type {
   IngestionHistoryEntry,
   MetricsSnapshot,
   AppNotification,
+  SearchHistoryEntry,
+  SearchHistoryFilters,
+  SearchHistoryResponse,
   SearchHistoryItem,
   SearchResponse,
   SearchResult,
@@ -50,6 +53,73 @@ export const mockRecentSearches: SearchHistoryItem[] = [
   { id: 4, term: "plano pedagógico" },
 ];
 
+const mockSearchHistoryEntries: SearchHistoryEntry[] = [
+  {
+    id: 101,
+    query: "resolução normativa",
+    createdAt: "2025-08-12T14:30:00",
+    resultCount: 5,
+    responseTimeMs: 182,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Acadêmico",
+      documentType: "Resolução",
+      author: "Conselho Superior",
+      dateFrom: "2025-01-01",
+      dateTo: "2025-12-31",
+      sortBy: "relevancia",
+    },
+  },
+  {
+    id: 102,
+    query: "edital 2025",
+    createdAt: "2025-08-12T13:12:00",
+    resultCount: 3,
+    responseTimeMs: 141,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Acadêmico",
+      documentType: "Edital",
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      sortBy: "data-desc",
+    },
+  },
+  {
+    id: 103,
+    query: "relatório gestão",
+    createdAt: "2025-08-11T16:10:00",
+    resultCount: 2,
+    responseTimeMs: 117,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Administrativo",
+      documentType: "Relatório",
+      author: "Campus Serra",
+      dateFrom: "2024-01-01",
+      dateTo: null,
+      sortBy: "titulo",
+    },
+  },
+  {
+    id: 104,
+    query: "plano pedagógico",
+    createdAt: "2025-08-10T09:45:00",
+    resultCount: 1,
+    responseTimeMs: 98,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: null,
+      documentType: "Plano",
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      sortBy: "relevancia",
+    },
+  },
+];
+
 export const mockSearch = (
   query: string,
   page = 1,
@@ -57,6 +127,7 @@ export const mockSearch = (
   filters: {
     category?: string;
     documentType?: string;
+    author?: string;
     dateFrom?: string;
     dateTo?: string;
   } = {},
@@ -68,7 +139,14 @@ export const mockSearch = (
         if (filters.category && normalizeMockText(result.category) !== normalizeMockText(filters.category)) {
           return false;
         }
-        if (filters.documentType && normalizeMockText(result.type) !== normalizeMockText(filters.documentType)) {
+        if (filters.documentType) {
+          const documentTypeMatches = normalizeMockText(result.documentType) === normalizeMockText(filters.documentType);
+          const fileTypeMatches = normalizeMockText(result.type) === normalizeMockText(filters.documentType);
+          if (!documentTypeMatches && !fileTypeMatches) {
+            return false;
+          }
+        }
+        if (filters.author && normalizeMockText(result.author) !== normalizeMockText(filters.author)) {
           return false;
         }
         if (filters.dateFrom && result.date < filters.dateFrom) {
@@ -98,6 +176,40 @@ export const mockSearch = (
 
   return {
     query,
+    total,
+    page: safePage,
+    perPage,
+    totalPages,
+    items: filtered.slice(start, start + perPage),
+  };
+};
+
+export const mockSearchHistory = (
+  filters: SearchHistoryFilters = {},
+): SearchHistoryResponse => {
+  const filtered = mockSearchHistoryEntries.filter((entry) => {
+    if (
+      filters.query &&
+      !normalizeMockText(entry.query).includes(normalizeMockText(filters.query))
+    ) {
+      return false;
+    }
+    if (filters.performedFrom && entry.createdAt.slice(0, 10) < filters.performedFrom) {
+      return false;
+    }
+    if (filters.performedTo && entry.createdAt.slice(0, 10) > filters.performedTo) {
+      return false;
+    }
+    return true;
+  });
+
+  const perPage = filters.limit ?? 10;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(Math.max(filters.page ?? 1, 1), totalPages);
+  const start = (safePage - 1) * perPage;
+
+  return {
     total,
     page: safePage,
     perPage,

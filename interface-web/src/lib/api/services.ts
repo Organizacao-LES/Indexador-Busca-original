@@ -10,6 +10,7 @@ import {
   mockNotifications,
   mockRecentSearches,
   mockSearch,
+  mockSearchHistory,
   mockSessionUser,
   mockUsers,
 } from "@/lib/api/mock-data";
@@ -29,6 +30,8 @@ import type {
   MetricsSnapshot,
   ReindexResult,
   SearchFilters,
+  SearchHistoryFilters,
+  SearchHistoryResponse,
   SearchHistoryItem,
   SearchResponse,
   SessionUser,
@@ -155,6 +158,7 @@ export const searchService = {
         q: query,
         category: filters.category,
         documentType: filters.documentType,
+        author: filters.author,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         sortBy: filters.sortBy,
@@ -171,6 +175,23 @@ export const searchService = {
     }
 
     return apiRequest<SearchHistoryItem[]>("/api/v1/search/history");
+  },
+
+  async history(filters: SearchHistoryFilters = {}): Promise<SearchHistoryResponse> {
+    if (shouldUseMocks()) {
+      await delay(150);
+      return mockSearchHistory(filters);
+    }
+
+    return apiRequest<SearchHistoryResponse>("/api/v1/search/history/entries", {
+      query: {
+        q: filters.query,
+        performedFrom: filters.performedFrom,
+        performedTo: filters.performedTo,
+        limit: filters.limit,
+        page: filters.page,
+      },
+    });
   },
 };
 
