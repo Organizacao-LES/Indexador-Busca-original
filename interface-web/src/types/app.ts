@@ -16,6 +16,7 @@ export type SessionUser = UserSummary & {
 export type SearchFilters = {
   category?: string;
   documentType?: string;
+  author?: string;
   dateFrom?: string;
   dateTo?: string;
   sortBy?: string;
@@ -29,6 +30,11 @@ export type SearchResult = {
   snippet: string;
   category: string;
   type: string;
+  documentType: string;
+  author: string;
+  fileName: string;
+  mimeType: string;
+  size: string;
   date: string;
   relevance: number;
 };
@@ -47,18 +53,59 @@ export type SearchHistoryItem = {
   term: string;
 };
 
+export type SearchHistoryFilters = {
+  query?: string;
+  performedFrom?: string;
+  performedTo?: string;
+  limit?: number;
+  page?: number;
+};
+
+export type SearchHistoryAppliedFilters = {
+  category?: string | null;
+  documentType?: string | null;
+  author?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  sortBy?: string | null;
+};
+
+export type SearchHistoryEntry = {
+  id: number;
+  query: string;
+  createdAt: string;
+  resultCount: number;
+  responseTimeMs: number;
+  user: string;
+  filters: SearchHistoryAppliedFilters;
+};
+
+export type SearchHistoryResponse = {
+  total: number;
+  page: number;
+  perPage: number;
+  totalPages: number;
+  items: SearchHistoryEntry[];
+};
+
 export type DocumentDetails = {
   id: number;
   title: string;
+  fileName: string;
   category: string;
   type: string;
+  documentType: string;
   date: string;
   author: string;
+  uploadedBy: string;
   format: string;
+  mimeType: string;
   pages: number;
   version: number;
   indexedAt: string;
+  sizeBytes: number;
   size: string;
+  hash: string;
   downloadUrl?: string;
   content: string;
   extractedCharacters: number;
@@ -82,12 +129,17 @@ export type DocumentUploadPayload = {
   file: File;
   category: string;
   documentDate?: string;
+  title?: string;
+  author?: string;
+  documentType?: string;
 };
 
 export type BatchUploadPayload = {
   files: File[];
   category: string;
   documentDate?: string;
+  author?: string;
+  documentType?: string;
 };
 
 export type UploadedDocument = {
@@ -96,6 +148,8 @@ export type UploadedDocument = {
   fileName: string;
   category: string;
   type: string;
+  documentType: string;
+  author: string;
   mimeType: string;
   sizeBytes: number;
   sizeLabel: string;
@@ -200,6 +254,20 @@ export type HistoryEntry = {
   action: string;
   details: string;
   status: "success" | "error" | "info" | "warning";
+};
+
+export type NotificationType = "info" | "success" | "warning" | "error";
+
+export type AppNotification = {
+  id: number;
+  userId: number;
+  title: string;
+  message: string;
+  type: NotificationType;
+  origin: string;
+  read: boolean;
+  createdAt: string;
+  readAt?: string | null;
 };
 
 export type AppSettings = {

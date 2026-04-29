@@ -25,6 +25,7 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    image: ifesdoc_backend:local
     container_name: ifesdoc_backend
     depends_on:
       postgres:
@@ -37,6 +38,26 @@ services:
       BACKEND_CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
     ports:
       - "8000:8000"
+    networks:
+      - ifesdoc_net
+
+  notification-worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: ifesdoc_backend:local
+    container_name: ifesdoc_notification_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ifesdoc_user:ifesdoc_pass@postgres:5432/ifesdoc
+      SECRET_KEY: change_this_secret
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      NOTIFICATION_WORKER_INTERVAL_SECONDS: 60
+    command: ["python", "-m", "app.workers.notification_worker"]
+    restart: unless-stopped
     networks:
       - ifesdoc_net
 

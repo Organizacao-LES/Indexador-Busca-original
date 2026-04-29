@@ -6,6 +6,10 @@ import type {
   IngestionBatchFile,
   IngestionHistoryEntry,
   MetricsSnapshot,
+  AppNotification,
+  SearchHistoryEntry,
+  SearchHistoryFilters,
+  SearchHistoryResponse,
   SearchHistoryItem,
   SearchResponse,
   SearchResult,
@@ -14,6 +18,12 @@ import type {
 } from "@/types/app";
 const stripHtml = (input: string): string =>
   input.replace(/<[^>]+>/g, "");
+
+const normalizeMockText = (input: string): string =>
+  input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
 export const mockUsers: UserSummary[] = [
   { id: 1, name: "Carlos Silva", login: "admin", email: "admin@ifes.edu.br", role: "Administrador", active: true },
@@ -29,11 +39,11 @@ export const mockSessionUser: SessionUser = {
 };
 
 const allSearchResults: SearchResult[] = [
-  { id: 1, title: "Resolução Normativa nº 45/2025 - Normas Acadêmicas", snippet: "Estabelece as normas para o funcionamento dos cursos de graduação, incluindo <mark>resolução</mark> sobre matrículas e avaliações...", category: "Acadêmico", type: "PDF", date: "2025-08-12", relevance: 95 },
-  { id: 2, title: "Edital de Seleção 012/2025 - Programa de Monitoria", snippet: "O Instituto Federal do Espírito Santo torna público o <mark>edital</mark> para seleção de monitores para o semestre 2025/2...", category: "Acadêmico", type: "PDF", date: "2025-07-28", relevance: 88 },
-  { id: 3, title: "Relatório de Gestão 2024 - Campus Serra", snippet: "Apresenta os resultados alcançados no exercício de 2024, contemplando indicadores de <mark>gestão</mark> acadêmica e administrativa...", category: "Administrativo", type: "PDF", date: "2025-03-15", relevance: 76 },
-  { id: 4, title: "Plano de Desenvolvimento Institucional 2024-2028", snippet: "Define as diretrizes estratégicas e metas institucionais para o quinquênio, abordando <mark>plano</mark> de expansão e qualidade...", category: "Administrativo", type: "PDF", date: "2024-12-10", relevance: 72 },
-  { id: 5, title: "Portaria nº 234/2025 - Comissão de Avaliação", snippet: "Designa os membros da comissão responsável pela avaliação institucional do período letivo 2025/1...", category: "Administrativo", type: "TXT", date: "2025-06-01", relevance: 64 },
+  { id: 1, title: "Resolução Normativa nº 45/2025 - Normas Acadêmicas", snippet: "Estabelece as normas para o funcionamento dos cursos de graduação, incluindo <mark>resolução</mark> sobre matrículas e avaliações...", category: "Acadêmico", type: "PDF", documentType: "Resolução", author: "Conselho Superior", fileName: "resolucao_normativa_45_2025.pdf", mimeType: "application/pdf", size: "2.4 MB", date: "2025-08-12", relevance: 95 },
+  { id: 2, title: "Edital de Seleção 012/2025 - Programa de Monitoria", snippet: "O Instituto Federal do Espírito Santo torna público o <mark>edital</mark> para seleção de monitores para o semestre 2025/2...", category: "Acadêmico", type: "PDF", documentType: "Edital", author: "Diretoria de Ensino", fileName: "edital_monitoria_012_2025.pdf", mimeType: "application/pdf", size: "1.1 MB", date: "2025-07-28", relevance: 88 },
+  { id: 3, title: "Relatório de Gestão 2024 - Campus Serra", snippet: "Apresenta os resultados alcançados no exercício de 2024, contemplando indicadores de <mark>gestão</mark> acadêmica e administrativa...", category: "Administrativo", type: "PDF", documentType: "Relatório", author: "Campus Serra", fileName: "relatorio_gestao_2024.pdf", mimeType: "application/pdf", size: "3.8 MB", date: "2025-03-15", relevance: 76 },
+  { id: 4, title: "Plano de Desenvolvimento Institucional 2024-2028", snippet: "Define as diretrizes estratégicas e metas institucionais para o quinquênio, abordando <mark>plano</mark> de expansão e qualidade...", category: "Administrativo", type: "PDF", documentType: "Plano", author: "Reitoria", fileName: "pdi_2024_2028.pdf", mimeType: "application/pdf", size: "4.2 MB", date: "2024-12-10", relevance: 72 },
+  { id: 5, title: "Portaria nº 234/2025 - Comissão de Avaliação", snippet: "Designa os membros da comissão responsável pela avaliação institucional do período letivo 2025/1...", category: "Administrativo", type: "TXT", documentType: "Portaria", author: "Direção Geral", fileName: "portaria_234_2025.txt", mimeType: "text/plain", size: "46 KB", date: "2025-06-01", relevance: 64 },
 ];
 
 export const mockRecentSearches: SearchHistoryItem[] = [
@@ -43,11 +53,108 @@ export const mockRecentSearches: SearchHistoryItem[] = [
   { id: 4, term: "plano pedagógico" },
 ];
 
-export const mockSearch = (query: string, page = 1, perPage = 20): SearchResponse => {
-  const normalized = query.trim().toLowerCase();
+const mockSearchHistoryEntries: SearchHistoryEntry[] = [
+  {
+    id: 101,
+    query: "resolução normativa",
+    createdAt: "2025-08-12T14:30:00",
+    resultCount: 5,
+    responseTimeMs: 182,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Acadêmico",
+      documentType: "Resolução",
+      author: "Conselho Superior",
+      dateFrom: "2025-01-01",
+      dateTo: "2025-12-31",
+      sortBy: "relevancia",
+    },
+  },
+  {
+    id: 102,
+    query: "edital 2025",
+    createdAt: "2025-08-12T13:12:00",
+    resultCount: 3,
+    responseTimeMs: 141,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Acadêmico",
+      documentType: "Edital",
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      sortBy: "data-desc",
+    },
+  },
+  {
+    id: 103,
+    query: "relatório gestão",
+    createdAt: "2025-08-11T16:10:00",
+    resultCount: 2,
+    responseTimeMs: 117,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: "Administrativo",
+      documentType: "Relatório",
+      author: "Campus Serra",
+      dateFrom: "2024-01-01",
+      dateTo: null,
+      sortBy: "titulo",
+    },
+  },
+  {
+    id: 104,
+    query: "plano pedagógico",
+    createdAt: "2025-08-10T09:45:00",
+    resultCount: 1,
+    responseTimeMs: 98,
+    user: "admin@ifes.edu.br",
+    filters: {
+      category: null,
+      documentType: "Plano",
+      author: null,
+      dateFrom: null,
+      dateTo: null,
+      sortBy: "relevancia",
+    },
+  },
+];
+
+export const mockSearch = (
+  query: string,
+  page = 1,
+  perPage = 20,
+  filters: {
+    category?: string;
+    documentType?: string;
+    author?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {},
+): SearchResponse => {
+  const normalized = normalizeMockText(query.trim());
   const filtered = normalized === "xyz123"
     ? []
     : allSearchResults.filter((result) => {
+        if (filters.category && normalizeMockText(result.category) !== normalizeMockText(filters.category)) {
+          return false;
+        }
+        if (filters.documentType) {
+          const documentTypeMatches = normalizeMockText(result.documentType) === normalizeMockText(filters.documentType);
+          const fileTypeMatches = normalizeMockText(result.type) === normalizeMockText(filters.documentType);
+          if (!documentTypeMatches && !fileTypeMatches) {
+            return false;
+          }
+        }
+        if (filters.author && normalizeMockText(result.author) !== normalizeMockText(filters.author)) {
+          return false;
+        }
+        if (filters.dateFrom && result.date < filters.dateFrom) {
+          return false;
+        }
+        if (filters.dateTo && result.date > filters.dateTo) {
+          return false;
+        }
         if (!normalized) {
           return true;
         }
@@ -56,7 +163,10 @@ export const mockSearch = (query: string, page = 1, perPage = 20): SearchRespons
           result.title,
           stripHtml(result.snippet),
           result.category,
-        ].some((text) => text.toLowerCase().includes(normalized));
+          result.documentType,
+          result.author,
+          result.fileName,
+        ].some((text) => normalizeMockText(text).includes(normalized));
       });
 
   const total = filtered.length;
@@ -74,19 +184,59 @@ export const mockSearch = (query: string, page = 1, perPage = 20): SearchRespons
   };
 };
 
+export const mockSearchHistory = (
+  filters: SearchHistoryFilters = {},
+): SearchHistoryResponse => {
+  const filtered = mockSearchHistoryEntries.filter((entry) => {
+    if (
+      filters.query &&
+      !normalizeMockText(entry.query).includes(normalizeMockText(filters.query))
+    ) {
+      return false;
+    }
+    if (filters.performedFrom && entry.createdAt.slice(0, 10) < filters.performedFrom) {
+      return false;
+    }
+    if (filters.performedTo && entry.createdAt.slice(0, 10) > filters.performedTo) {
+      return false;
+    }
+    return true;
+  });
+
+  const perPage = filters.limit ?? 10;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(Math.max(filters.page ?? 1, 1), totalPages);
+  const start = (safePage - 1) * perPage;
+
+  return {
+    total,
+    page: safePage,
+    perPage,
+    totalPages,
+    items: filtered.slice(start, start + perPage),
+  };
+};
+
 export const mockDocuments: DocumentDetails[] = [
   {
     id: 1,
     title: "Resolução Normativa nº 45/2025 - Normas Acadêmicas",
+    fileName: "resolucao_normativa_45_2025.pdf",
     category: "Acadêmico",
     type: "PDF",
+    documentType: "Resolução",
     date: "2025-08-12",
     author: "Conselho Superior",
+    uploadedBy: "Administrador",
     format: "PDF",
+    mimeType: "application/pdf",
     pages: 12,
     version: 2,
     indexedAt: "2025-08-12 14:32",
+    sizeBytes: 2516582,
     size: "2.4 MB",
+    hash: "mock-sha256",
     downloadUrl: "#",
     extractedCharacters: 2340,
     content: `Art. 1º Esta Resolução estabelece as normas gerais para o funcionamento dos cursos de graduação do Instituto Federal do Espírito Santo - IFES.
@@ -203,6 +353,42 @@ export const mockHistory: HistoryEntry[] = [
   { date: "2025-08-09 17:30", user: "admin@ifes.edu.br", action: "Ingestão", details: "Upload em lote: 5 arquivos processados (UC09)", status: "success" },
   { date: "2025-08-09 11:00", user: "admin@ifes.edu.br", action: "Ação Administrativa", details: "Usuário ana.costa inativado (UC05)", status: "warning" },
   { date: "2025-08-08 15:20", user: "admin@ifes.edu.br", action: "Reindexação", details: "Documento portaria_032.pdf reindexado (UC13)", status: "success" },
+];
+
+export const mockNotifications: AppNotification[] = [
+  {
+    id: 1,
+    userId: 1,
+    title: "Notificações ativas",
+    message: "O serviço de notificações do IFESDOC está em execução.",
+    type: "success",
+    origin: "ifesdoc-worker",
+    read: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    readAt: null,
+  },
+  {
+    id: 2,
+    userId: 1,
+    title: "Documento rejeitado",
+    message: "planilha_notas.csv: formato incompatível com o processo de indexação.",
+    type: "warning",
+    origin: "ifesdoc-worker",
+    read: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    readAt: null,
+  },
+  {
+    id: 3,
+    userId: 1,
+    title: "Reindexação concluída",
+    message: "A base de documentos foi reindexada com sucesso.",
+    type: "info",
+    origin: "admin:admin@ifes.edu.br",
+    read: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    readAt: new Date(Date.now() - 1000 * 60 * 80).toISOString(),
+  },
 ];
 
 export const defaultSettings: AppSettings = {

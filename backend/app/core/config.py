@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     DOCUMENT_MAX_FILE_SIZE_MB: int = 50
     DOCUMENT_ALLOWED_EXTENSIONS: list[str] = ["pdf", "docx", "txt", "csv"]
 
+    NOTIFICATION_WORKER_INTERVAL_SECONDS: int = 60
+
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:8080",
         "http://127.0.0.1:8080",

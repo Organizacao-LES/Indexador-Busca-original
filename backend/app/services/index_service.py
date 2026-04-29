@@ -21,11 +21,13 @@ from app.pipeline.stages import (
     TextPreprocessStage,
     TextTokenizeStage,
 )
+from app.repositories.document_repository import DocumentRepository
 from app.services.administrative_history_service import administrative_history_service
 
 
 class IndexService:
     def __init__(self):
+        self.document_repository = DocumentRepository()
         self.pipeline = DocumentIngestionPipeline(
             [
                 TextPreprocessStage(),
@@ -63,10 +65,14 @@ class IndexService:
             raise DocumentNotFoundException("Versão ativa do documento não encontrada.")
 
         started_at = time.perf_counter()
+        payload = self.document_repository.get_document_payload(db, document_id)
+        metadata_text = self._metadata_text(payload) if payload else ""
         context = {
             "document_id": document.cod_documento,
             "document_history": document_history,
-            "extracted_text": document_history.texto_extraido or "",
+            "extracted_text": "\n".join(
+                part for part in [metadata_text, document_history.texto_extraido or ""] if part
+            ),
         }
 
         try:
@@ -108,6 +114,16 @@ class IndexService:
             "termCount": result["term_count"],
             "tokenCount": result["token_count"],
         }
+
+    def _metadata_text(self, payload: dict) -> str:
+        metadata_values = [
+            payload.get("title"),
+            payload.get("author_name"),
+            payload.get("category"),
+            payload.get("document_type"),
+            payload.get("file_name"),
+        ]
+        return "\n".join(str(value) for value in metadata_values if value)
 
     def reindex_document(self, db: Session, *, document_id: int, triggered_by: User) -> dict:
         return self.process_document(

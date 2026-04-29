@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from collections.abc import Generator
 from pathlib import Path
 
@@ -34,6 +35,34 @@ def _upload(client: TestClient, token: str, file_name: str, content: bytes, cate
     assert response.status_code == 201
 
 
+def _upload_with_metadata(
+    client: TestClient,
+    token: str,
+    file_name: str,
+    content: bytes,
+    *,
+    category: str,
+    author: str | None = None,
+    document_type: str | None = None,
+    document_date: str | None = None,
+):
+    data = {"category": category}
+    if author:
+        data["author"] = author
+    if document_type:
+        data["document_type"] = document_type
+    if document_date:
+        data["document_date"] = document_date
+    response = client.post(
+        "/api/v1/ingestion/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": (file_name, content, "text/plain")},
+        data=data,
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
 def _client_fixture(tmp_path: Path) -> Generator[TestClient, None, None]:
     engine = create_engine(
         "sqlite://",
@@ -58,8 +87,13 @@ def _client_fixture(tmp_path: Path) -> Generator[TestClient, None, None]:
 
     original_engine = main_module.engine
     original_storage_dir = document_service.storage_dir
+    original_lifespan = app.router.lifespan_context
     document_service.storage_dir = tmp_path / "documents"
     main_module.engine = engine
+
+    @asynccontextmanager
+    async def no_op_lifespan(_: object):
+        yield
 
     def override_get_db() -> Generator[Session, None, None]:
         override_db = testing_session_local()
@@ -69,10 +103,12 @@ def _client_fixture(tmp_path: Path) -> Generator[TestClient, None, None]:
             override_db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.router.lifespan_context = no_op_lifespan
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
+    app.router.lifespan_context = original_lifespan
     main_module.engine = original_engine
     document_service.storage_dir = original_storage_dir
     Base.metadata.drop_all(bind=engine)
@@ -105,3 +141,65 @@ def test_search_returns_ranked_documents_and_recent_history(tmp_path: Path):
         assert history_response.status_code == 200
         history_payload = history_response.json()
         assert history_payload[0]["term"] == "pesquisa ifes"
+
+
+def test_search_supports_author_filter_and_detailed_history(tmp_path: Path):
+    for client in _client_fixture(tmp_path):
+        token = _login(client)
+        _upload_with_metadata(
+            client,
+            token,
+            "relatorio-extensao.txt",
+            b"Relatorio anual de extensao do IFES com projetos institucionais.",
+            category="pesquisa",
+            author="Maria de Souza",
+            document_type="Relatorio",
+            document_date="2026-04-10",
+        )
+        _upload_with_metadata(
+            client,
+            token,
+            "relatorio-ensino.txt",
+            b"Relatorio anual de extensao do IFES com projetos institucionais.",
+            category="academico",
+            author="Joao Pereira",
+            document_type="Relatorio",
+            document_date="2026-04-12",
+        )
+
+        search_response = client.get(
+            "/api/v1/search",
+            headers={"Authorization": f"Bearer {token}"},
+            params={
+                "q": "relatorio extensao ifes",
+                "author": "Maria de Souza",
+                "category": "pesquisa",
+                "documentType": "Relatorio",
+                "dateFrom": "2026-04-01",
+                "dateTo": "2026-04-30",
+            },
+        )
+
+        assert search_response.status_code == 200
+        payload = search_response.json()
+        assert payload["total"] == 1
+        assert payload["items"][0]["author"] == "Maria de Souza"
+        assert payload["items"][0]["category"] == "pesquisa"
+
+        history_response = client.get(
+            "/api/v1/search/history/entries",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"limit": 10, "page": 1},
+        )
+
+        assert history_response.status_code == 200
+        history_payload = history_response.json()
+        assert history_payload["total"] == 1
+        assert history_payload["items"][0]["query"] == "relatorio extensao ifes"
+        assert history_payload["items"][0]["resultCount"] == 1
+        assert history_payload["items"][0]["user"] == "admin@ifes.edu.br"
+        assert history_payload["items"][0]["filters"]["author"] == "Maria de Souza"
+        assert history_payload["items"][0]["filters"]["category"] == "pesquisa"
+        assert history_payload["items"][0]["filters"]["documentType"] == "Relatorio"
+        assert history_payload["items"][0]["filters"]["dateFrom"] == "2026-04-01"
+        assert history_payload["items"][0]["filters"]["dateTo"] == "2026-04-30"

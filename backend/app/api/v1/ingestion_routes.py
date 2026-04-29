@@ -26,6 +26,9 @@ def upload_document(
     file: UploadFile = File(...),
     category: str = Form(...),
     document_date: date | None = Form(default=None),
+    title: str | None = Form(default=None),
+    author: str | None = Form(default=None),
+    document_type: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -35,6 +38,9 @@ def upload_document(
         category=category,
         uploaded_by=current_user,
         document_date=document_date,
+        title=title,
+        author=author,
+        document_type=document_type,
     )
     return document_service.to_upload_response(document)
 
@@ -48,6 +54,8 @@ def upload_documents_batch(
     files: list[UploadFile] = File(...),
     category: str = Form(...),
     document_date: date | None = Form(default=None),
+    author: str | None = Form(default=None),
+    document_type: str | None = Form(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -57,6 +65,8 @@ def upload_documents_batch(
         category=category,
         uploaded_by=current_user,
         document_date=document_date,
+        author=author,
+        document_type=document_type,
     )
 
 

@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api/client";
+import { ApiError, apiBlobRequest, apiRequest } from "@/lib/api/client";
 import {
   defaultSettings,
   mockBatchFiles,
@@ -7,8 +7,10 @@ import {
   mockIndexStatus,
   mockIngestionHistory,
   mockMetrics,
+  mockNotifications,
   mockRecentSearches,
   mockSearch,
+  mockSearchHistory,
   mockSessionUser,
   mockUsers,
 } from "@/lib/api/mock-data";
@@ -16,6 +18,7 @@ import { appEnv } from "@/lib/env";
 import { storageKeys } from "@/lib/storage";
 import type {
   AppSettings,
+  AppNotification,
   BatchUploadPayload,
   BatchUploadResult,
   DocumentDetails,
@@ -27,6 +30,8 @@ import type {
   MetricsSnapshot,
   ReindexResult,
   SearchFilters,
+  SearchHistoryFilters,
+  SearchHistoryResponse,
   SearchHistoryItem,
   SearchResponse,
   SessionUser,
@@ -35,6 +40,8 @@ import type {
 } from "@/types/app";
 
 const delay = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let mockNotificationStore = mockNotifications.map((notification) => ({ ...notification }));
 
 const shouldUseMocks = () => appEnv.useMockApi;
 
@@ -143,7 +150,7 @@ export const searchService = {
   async search(query: string, filters: SearchFilters = {}): Promise<SearchResponse> {
     if (shouldUseMocks()) {
       await delay();
-      return mockSearch(query, filters.page, filters.limit);
+      return mockSearch(query, filters.page, filters.limit, filters);
     }
 
     return apiRequest<SearchResponse>("/api/v1/search", {
@@ -151,6 +158,7 @@ export const searchService = {
         q: query,
         category: filters.category,
         documentType: filters.documentType,
+        author: filters.author,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         sortBy: filters.sortBy,
@@ -167,6 +175,23 @@ export const searchService = {
     }
 
     return apiRequest<SearchHistoryItem[]>("/api/v1/search/history");
+  },
+
+  async history(filters: SearchHistoryFilters = {}): Promise<SearchHistoryResponse> {
+    if (shouldUseMocks()) {
+      await delay(150);
+      return mockSearchHistory(filters);
+    }
+
+    return apiRequest<SearchHistoryResponse>("/api/v1/search/history/entries", {
+      query: {
+        q: filters.query,
+        performedFrom: filters.performedFrom,
+        performedTo: filters.performedTo,
+        limit: filters.limit,
+        page: filters.page,
+      },
+    });
   },
 };
 
@@ -192,6 +217,37 @@ export const documentService = {
 
     return apiRequest<void>(`/api/v1/documents/${id}/reindex`, {
       method: "POST",
+    });
+  },
+
+  async download(id: number): Promise<{ blob: Blob; filename: string | null }> {
+    if (shouldUseMocks()) {
+      await delay(150);
+      const document = mockDocuments.find((item) => item.id === id);
+      return {
+        blob: new Blob([document?.content || ""], { type: "text/plain;charset=utf-8" }),
+        filename: `${document?.title || "documento"}.txt`,
+      };
+    }
+
+    return apiBlobRequest(`/api/v1/documents/${id}/download`);
+  },
+
+  async export(id: number, format: "txt" | "json"): Promise<{ blob: Blob; filename: string | null }> {
+    if (shouldUseMocks()) {
+      await delay(150);
+      const document = mockDocuments.find((item) => item.id === id);
+      const content = format === "json" ? JSON.stringify(document, null, 2) : document?.content || "";
+      return {
+        blob: new Blob([content], {
+          type: format === "json" ? "application/json;charset=utf-8" : "text/plain;charset=utf-8",
+        }),
+        filename: `${document?.title || "documento"}.${format}`,
+      };
+    }
+
+    return apiBlobRequest(`/api/v1/documents/${id}/export`, {
+      query: { format },
     });
   },
 };
@@ -266,10 +322,12 @@ export const ingestionService = {
       await delay(500);
       return {
         id: Date.now(),
-        title: payload.file.name.replace(/\.[^.]+$/, ""),
+        title: payload.title || payload.file.name.replace(/\.[^.]+$/, ""),
         fileName: payload.file.name,
         category: payload.category,
         type: payload.file.name.split(".").pop()?.toUpperCase() || "TXT",
+        documentType: payload.documentType || payload.file.name.split(".").pop()?.toUpperCase() || "TXT",
+        author: payload.author || "Administrador",
         mimeType: payload.file.type || "application/octet-stream",
         sizeBytes: payload.file.size,
         sizeLabel: `${(payload.file.size / 1024 / 1024).toFixed(1)} MB`,
@@ -288,6 +346,15 @@ export const ingestionService = {
     formData.append("category", payload.category);
     if (payload.documentDate) {
       formData.append("document_date", payload.documentDate);
+    }
+    if (payload.title) {
+      formData.append("title", payload.title);
+    }
+    if (payload.author) {
+      formData.append("author", payload.author);
+    }
+    if (payload.documentType) {
+      formData.append("document_type", payload.documentType);
     }
 
     return apiRequest<UploadedDocument>("/api/v1/ingestion/upload", {
@@ -337,6 +404,12 @@ export const ingestionService = {
     formData.append("category", payload.category);
     if (payload.documentDate) {
       formData.append("document_date", payload.documentDate);
+    }
+    if (payload.author) {
+      formData.append("author", payload.author);
+    }
+    if (payload.documentType) {
+      formData.append("document_type", payload.documentType);
     }
 
     return apiRequest<BatchUploadResult>("/api/v1/ingestion/upload-batch", {
@@ -395,6 +468,99 @@ export const historyService = {
   },
 };
 
+export const notificationService = {
+  async list(): Promise<AppNotification[]> {
+    if (shouldUseMocks()) {
+      await delay(120);
+      return [...mockNotificationStore].sort((left, right) =>
+        right.createdAt.localeCompare(left.createdAt),
+      );
+    }
+
+    return apiRequest<AppNotification[]>("/api/v1/notifications");
+  },
+
+  async unreadCount(): Promise<{ unread: number }> {
+    if (shouldUseMocks()) {
+      await delay(80);
+      return {
+        unread: mockNotificationStore.filter((notification) => !notification.read).length,
+      };
+    }
+
+    return apiRequest<{ unread: number }>("/api/v1/notifications/unread-count");
+  },
+
+  async send(payload: {
+    userId?: number;
+    broadcast?: boolean;
+    title: string;
+    message: string;
+    type?: AppNotification["type"];
+  }): Promise<AppNotification[]> {
+    if (shouldUseMocks()) {
+      await delay(200);
+      const created: AppNotification = {
+        id: Date.now(),
+        userId: payload.userId ?? 1,
+        title: payload.title,
+        message: payload.message,
+        type: payload.type ?? "info",
+        origin: "admin:mock",
+        read: false,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      };
+      mockNotificationStore = [created, ...mockNotificationStore];
+      return [created];
+    }
+
+    return apiRequest<AppNotification[]>("/api/v1/notifications", {
+      method: "POST",
+      body: payload,
+    });
+  },
+
+  async markAsRead(id: number): Promise<AppNotification> {
+    if (shouldUseMocks()) {
+      await delay(100);
+      const readAt = new Date().toISOString();
+      mockNotificationStore = mockNotificationStore.map((notification) =>
+        notification.id === id
+          ? { ...notification, read: true, readAt }
+          : notification,
+      );
+      const notification = mockNotificationStore.find((item) => item.id === id);
+      if (!notification) {
+        throw new Error("Notificação não encontrada.");
+      }
+      return notification;
+    }
+
+    return apiRequest<AppNotification>(`/api/v1/notifications/${id}/read`, {
+      method: "PATCH",
+    });
+  },
+
+  async markAllAsRead(): Promise<{ updated: number }> {
+    if (shouldUseMocks()) {
+      await delay(150);
+      const readAt = new Date().toISOString();
+      const updated = mockNotificationStore.filter((notification) => !notification.read).length;
+      mockNotificationStore = mockNotificationStore.map((notification) => ({
+        ...notification,
+        read: true,
+        readAt: notification.readAt ?? readAt,
+      }));
+      return { updated };
+    }
+
+    return apiRequest<{ updated: number }>("/api/v1/notifications/read-all", {
+      method: "PATCH",
+    });
+  },
+};
+
 export const settingsService = {
   async get(): Promise<AppSettings> {
     if (shouldUseMocks()) {
@@ -402,7 +568,14 @@ export const settingsService = {
       return readStoredSettings();
     }
 
-    return apiRequest<AppSettings>("/api/v1/settings");
+    try {
+      return await apiRequest<AppSettings>("/api/v1/settings");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return readStoredSettings();
+      }
+      throw error;
+    }
   },
 
   async update(settings: AppSettings): Promise<AppSettings> {
@@ -412,9 +585,17 @@ export const settingsService = {
       return settings;
     }
 
-    return apiRequest<AppSettings>("/api/v1/settings", {
-      method: "PUT",
-      body: settings,
-    });
+    try {
+      return await apiRequest<AppSettings>("/api/v1/settings", {
+        method: "PUT",
+        body: settings,
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        persistSettings(settings);
+        return settings;
+      }
+      throw error;
+    }
   },
 };

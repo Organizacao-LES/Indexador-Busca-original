@@ -16,6 +16,7 @@ from app.domain.administrative_history import AdministrativeHistory
 from app.domain.document_category import DocumentCategory
 from app.domain.document_field import DocumentField
 from app.domain.document_history import DocumentHistory
+from app.domain.document_metadata import DocumentMetadata
 from app.domain.field_type import FieldType
 from app.domain.index_history import IndexHistory
 from app.domain.ingestion_history import IngestionHistory
@@ -23,6 +24,7 @@ from app.domain.ingestion_status import IngestionStatus
 from app.domain.inverted_index import InvertedIndex
 from app.domain.invalid_document import InvalidDocument
 from app.domain.document import Document
+from app.domain.notification import Notification
 from app.domain.search_history import SearchHistory
 from app.domain.term import Term
 from app.domain.user import User

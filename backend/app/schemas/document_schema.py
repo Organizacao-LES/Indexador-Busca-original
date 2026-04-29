@@ -9,6 +9,8 @@ class DocumentUploadResponse(BaseModel):
     fileName: str
     category: str
     type: str
+    documentType: str
+    author: str
     mimeType: str
     sizeBytes: int
     sizeLabel: str
@@ -24,18 +26,42 @@ class DocumentUploadResponse(BaseModel):
 class DocumentDetailsResponse(BaseModel):
     id: int
     title: str
+    fileName: str
     category: str
     type: str
+    documentType: str
     date: str
     author: str
+    uploadedBy: str
     format: str
+    mimeType: str
     pages: int
     version: int
     indexedAt: str
+    sizeBytes: int
     size: str
+    hash: str
     downloadUrl: str | None = None
     content: str
     extractedCharacters: int
+
+
+class DocumentMetadataResponse(BaseModel):
+    id: int
+    title: str
+    author: str
+    uploadedBy: str
+    category: str
+    documentType: str
+    fileFormat: str
+    fileName: str
+    mimeType: str
+    sizeBytes: int
+    sizeLabel: str
+    hash: str
+    publicationDate: str | None = None
+    uploadedAt: datetime
+    version: int
 
 
 class IngestionBatchFileResponse(BaseModel):

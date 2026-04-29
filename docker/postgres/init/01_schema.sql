@@ -107,6 +107,26 @@ CREATE TABLE IF NOT EXISTS historico_administrativo (
         REFERENCES usuario (cod_usuario)
 );
 
+CREATE TABLE IF NOT EXISTS notificacao (
+    cod_notificacao BIGSERIAL PRIMARY KEY,
+    cod_usuario BIGINT NOT NULL,
+    titulo VARCHAR(120) NOT NULL,
+    mensagem TEXT NOT NULL,
+    tipo VARCHAR(30) NOT NULL DEFAULT 'info',
+    origem VARCHAR(80) NOT NULL DEFAULT 'ifesdoc',
+    lida BOOLEAN NOT NULL DEFAULT FALSE,
+    criada_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lida_em TIMESTAMP,
+    chave_dedupe VARCHAR(160),
+    CONSTRAINT fk_notificacao_usuario
+        FOREIGN KEY (cod_usuario)
+        REFERENCES usuario (cod_usuario),
+    CONSTRAINT chk_notificacao_tipo
+        CHECK (tipo IN ('info', 'success', 'warning', 'error')),
+    CONSTRAINT uq_notificacao_usuario_chave_dedupe
+        UNIQUE (cod_usuario, chave_dedupe)
+);
+
 CREATE TABLE IF NOT EXISTS historico_documento (
     cod_historico_documento BIGSERIAL PRIMARY KEY,
     cod_documento BIGINT NOT NULL,
@@ -127,6 +147,27 @@ CREATE TABLE IF NOT EXISTS historico_documento (
         UNIQUE (cod_documento, numero_versao),
     CONSTRAINT chk_historico_documento_numero_versao
         CHECK (numero_versao >= 1)
+);
+
+CREATE TABLE IF NOT EXISTS documento_metadado (
+    cod_documento_metadado BIGSERIAL PRIMARY KEY,
+    cod_documento BIGINT NOT NULL,
+    autor VARCHAR(255),
+    tipo_documento VARCHAR(100),
+    nome_arquivo_original VARCHAR(255) NOT NULL,
+    mime_type VARCHAR(255) NOT NULL,
+    tamanho_bytes BIGINT NOT NULL DEFAULT 0,
+    hash_arquivo VARCHAR(64) NOT NULL,
+    metadados_extras TEXT,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMP,
+    CONSTRAINT fk_documento_metadado_documento
+        FOREIGN KEY (cod_documento)
+        REFERENCES documento (cod_documento),
+    CONSTRAINT uq_documento_metadado_documento
+        UNIQUE (cod_documento),
+    CONSTRAINT chk_documento_metadado_tamanho
+        CHECK (tamanho_bytes >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS historico_ingestao (
@@ -248,6 +289,12 @@ CREATE INDEX IF NOT EXISTS idx_historico_administrativo_usuario
 CREATE INDEX IF NOT EXISTS idx_historico_administrativo_entidade
     ON historico_administrativo (entidade_tipo, cod_entidade);
 
+CREATE INDEX IF NOT EXISTS idx_notificacao_usuario_lida
+    ON notificacao (cod_usuario, lida, criada_em);
+
+CREATE INDEX IF NOT EXISTS idx_notificacao_criada_em
+    ON notificacao (criada_em);
+
 CREATE INDEX IF NOT EXISTS idx_historico_documento_documento
     ON historico_documento (cod_documento);
 
@@ -257,6 +304,12 @@ CREATE INDEX IF NOT EXISTS idx_historico_documento_usuario
 CREATE UNIQUE INDEX IF NOT EXISTS uq_historico_documento_versao_ativa
     ON historico_documento (cod_documento)
     WHERE versao_ativa = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_documento_metadado_autor
+    ON documento_metadado (autor);
+
+CREATE INDEX IF NOT EXISTS idx_documento_metadado_tipo
+    ON documento_metadado (tipo_documento);
 
 CREATE INDEX IF NOT EXISTS idx_historico_ingestao_usuario
     ON historico_ingestao (cod_usuario);
@@ -301,4 +354,3 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
 COMMIT;
-
