@@ -9,5 +9,5 @@ echo ==========================
 echo.
 
 docker build -f Dockerfile.windows -t frontend .
-run-docker.cmd
+cmd /c "run-docker.cmd"
 timeout 10
