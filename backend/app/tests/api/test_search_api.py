@@ -1,4 +1,3 @@
-from contextlib import asynccontextmanager
 from collections.abc import Generator
 from pathlib import Path
 
@@ -97,13 +96,8 @@ def _client_fixture(tmp_path: Path) -> Generator[TestClient, None, None]:
 
     original_engine = main_module.engine
     original_storage_dir = document_service.storage_dir
-    original_lifespan = app.router.lifespan_context
     document_service.storage_dir = tmp_path / "documents"
     main_module.engine = engine
-
-    @asynccontextmanager
-    async def no_op_lifespan(_: object):
-        yield
 
     def override_get_db() -> Generator[Session, None, None]:
         override_db = testing_session_local()
@@ -113,12 +107,10 @@ def _client_fixture(tmp_path: Path) -> Generator[TestClient, None, None]:
             override_db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    app.router.lifespan_context = no_op_lifespan
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
-    app.router.lifespan_context = original_lifespan
     main_module.engine = original_engine
     document_service.storage_dir = original_storage_dir
     Base.metadata.drop_all(bind=engine)

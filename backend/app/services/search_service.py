@@ -34,11 +34,22 @@ class SearchService:
     ) -> dict:
         started_at = time.perf_counter()
         if not query or not query.strip():
-            return self._empty_response(query=query, page=page, per_page=limit)
+            return self._empty_response(
+                query=query,
+                page=page,
+                per_page=limit,
+                response_time_ms=0,
+            )
 
         terms = self._process_query(query)
         if not terms:
-            response = self._empty_response(query=query, page=page, per_page=limit)
+            response_time_ms = self._elapsed_response_time_ms(started_at)
+            response = self._empty_response(
+                query=query,
+                page=page,
+                per_page=limit,
+                response_time_ms=response_time_ms,
+            )
             self._register_search(
                 db,
                 user_id=user_id,
@@ -52,7 +63,7 @@ class SearchService:
                     sort_by,
                 ),
                 result_count=0,
-                started_at=started_at,
+                response_time_ms=response_time_ms,
             )
             return response
 
@@ -108,12 +119,14 @@ class SearchService:
                 }
             )
 
+        response_time_ms = self._elapsed_response_time_ms(started_at)
         response = {
             "query": query,
             "total": len(ranked_payloads),
             "page": page,
             "perPage": limit,
             "totalPages": max(math.ceil(len(ranked_payloads) / limit), 1),
+            "responseTimeMs": response_time_ms,
             "items": items,
         }
         self._register_search(
@@ -129,7 +142,7 @@ class SearchService:
                 sort_by,
             ),
             result_count=len(ranked_payloads),
-            started_at=started_at,
+            response_time_ms=response_time_ms,
         )
         return response
 
@@ -351,6 +364,9 @@ class SearchService:
             response_time_ms=response_time_ms,
         )
 
+    def _elapsed_response_time_ms(self, started_at: float) -> int:
+        return max(int((time.perf_counter() - started_at) * 1000), 0)
+
     def _serialize_filters(
         self,
         category: str | None,
@@ -413,13 +429,21 @@ class SearchService:
             return value
         return value.isoformat()
 
-    def _empty_response(self, *, query: str, page: int, per_page: int) -> dict:
+    def _empty_response(
+        self,
+        *,
+        query: str,
+        page: int,
+        per_page: int,
+        response_time_ms: int,
+    ) -> dict:
         return {
             "query": query,
             "total": 0,
             "page": page,
             "perPage": per_page,
             "totalPages": 1,
+            "responseTimeMs": response_time_ms,
             "items": [],
         }
 
