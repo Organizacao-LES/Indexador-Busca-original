@@ -40,6 +40,228 @@ class DocumentService:
         self.max_size_bytes = settings.DOCUMENT_MAX_FILE_SIZE_MB * 1024 * 1024
         self.storage_dir = Path(settings.DOCUMENT_UPLOAD_DIR)
 
+
+    def update_document(
+        self,
+        db: Session,
+        *,
+        document_id: int,
+        file: UploadFile,
+        updated_by: User,
+    ):
+        # Busca o documento ativo
+        document = db.query(Document).filter(
+        Document.cod_documento == document_id,
+        Document.ativo.is_(True)
+        ).first()
+
+       # Se não existir, lança exceção
+        if not document:
+            raise DocumentNotFoundException()
+
+        filename = file.filename or ""
+
+        try:
+               
+                #  Extrai e valida extensão do arquivo
+                extension = self._extract_extension(filename)
+                self._validate_extension(extension)
+                
+                # Obtém adapter responsável pelo tipo de documento
+                adapter = self.adapter_registry.get(extension)
+
+                # Lê conteúdo do arquivo
+                content = file.file.read()
+                # Valida tamanho do arquivo
+                self._validate_size(content)
+                # Valida integridade do arquivo (ex: PDF válido)
+                adapter.validate_integrity(content)
+
+                # Extrai texto do documento
+                extracted_content = adapter.extract_text(content)
+
+        finally:
+             #  Garante fechamento do arquivo
+                file.file.close()
+                
+                
+         #  desativa versão atual do documento
+        current_version = db.query(DocumentHistory).filter(
+            DocumentHistory.cod_documento == document_id,
+            DocumentHistory.versao_ativa.is_(True)
+        ).first()
+
+        if current_version:
+            current_version.versao_ativa = False
+            
+            
+        # calcula nova versão
+        # Busca última versão para calcular próxima
+        last_version = db.query(DocumentHistory).filter(
+            DocumentHistory.cod_documento == document_id
+        ).order_by(DocumentHistory.numero_versao.desc()).first()
+
+        # Incrementa número da versão
+        new_version_number = (last_version.numero_versao if last_version else 0) + 1
+
+        # Armazena novo arquivo no sistema
+        storage_path = self._store_file(content, extension)
+
+        # Cria nova versão no histórico
+        new_history = DocumentHistory(
+            cod_documento=document_id,
+            cod_usuario=updated_by.cod_usuario,
+            numero_versao=new_version_number,
+            caminho_arquivo=str(storage_path),
+            texto_extraido=extracted_content,
+            texto_processado=extracted_content,
+            versao_ativa=True,
+        )
+
+        db.add(new_history)
+        db.flush()
+        
+    
+        # Reindexa documento (atualiza índice invertido)
+        index_service.reindex_document(
+            db,
+            document_id=document_id,
+            triggered_by=updated_by
+        )
+
+        #  Persiste alterações
+        db.commit()
+        
+        # Registra ação administrativa
+        administrative_history_service.log_action(
+        db,
+        actor=updated_by,
+        description=f"Documento {document.titulo} atualizado para versão {new_version_number}.",
+        action_type="Atualização",
+        entity_type="documento",
+        entity_id=document_id,
+        )
+
+        # Retorna payload atualizado
+        return self.get_document_payload(db, document_id)
+
+
+    def delete_document(
+        self,
+        db: Session,
+        *,
+        document_id: int,
+        deleted_by: User,
+    ):
+        #  Busca documento ativo
+        document = db.query(Document).filter(
+        Document.cod_documento == document_id,
+        Document.ativo.is_(True)
+        ).first()
+
+        # Se não existir
+        if not document:
+            raise DocumentNotFoundException()
+
+        # 🚫 Marca como inativo (remoção lógica)
+        document.ativo = False
+        
+        # reindexa (remove do índice)
+        # Atualiza índice para remover documento das buscas
+        index_service.reindex_document(
+            db,
+            document_id=document_id,
+            triggered_by=deleted_by
+        )
+
+        # Salva alterações
+        db.commit()
+        
+        # Log administrativo
+        administrative_history_service.log_action(
+            db,
+            actor=deleted_by,
+            description=f"Documento {document.titulo} removido logicamente.",
+            action_type="Remoção",
+            entity_type="documento",
+            entity_id=document_id,
+        )
+
+        return {"message": "Documento removido com sucesso."}
+
+
+    def list_versions(self, db: Session, document_id: int):
+        
+          # Busca todas versões do documento
+        versions = db.query(DocumentHistory).filter(
+            DocumentHistory.cod_documento == document_id
+        ).order_by(DocumentHistory.numero_versao.desc()).all()
+
+
+        # Formata resposta
+        return [
+            {
+                "version": int(v.numero_versao),
+                "createdAt": v.criado_em,
+                "active": v.versao_ativa,
+            }
+            for v in versions
+        ]
+        
+        
+    def restore_version(
+        self,
+        db: Session,
+        *,
+        document_id: int,
+        version_number: int,
+        restored_by: User,
+    ):
+        # Busca versão desejada
+        target_version = db.query(DocumentHistory).filter(
+        DocumentHistory.cod_documento == document_id,
+        DocumentHistory.numero_versao == version_number
+        ).first()
+
+        # Se não existir
+        if not target_version:
+            raise DocumentNotFoundException("Versão não encontrada.")
+        
+        
+        # Desativa versão atual
+        db.query(DocumentHistory).filter(
+            DocumentHistory.cod_documento == document_id,
+            DocumentHistory.versao_ativa.is_(True)
+        ).update({"versao_ativa": False})
+
+        # Ativa versão escolhida
+        target_version.versao_ativa = True
+        
+        
+        # reindexa com conteúdo restaurado
+        index_service.reindex_document(
+            db,
+            document_id=document_id,
+            triggered_by=restored_by
+        )
+
+        # Salva alterações
+        db.commit()
+        
+        # Log administrativo
+        administrative_history_service.log_action(
+        db,
+        actor=restored_by,
+        description=f"Documento restaurado para versão {version_number}.",
+        action_type="Restauração",
+        entity_type="documento",
+        entity_id=document_id,
+        )
+        # Retorna documento atualizado
+        return self.get_document_payload(db, document_id)
+
+
+
     def upload_document(
         self,
         db: Session,
@@ -534,6 +756,11 @@ class DocumentService:
     ) -> str:
         normalized = (value or "").strip() or fallback.strip()
         return normalized[:max_length]
+
+
+
+
+
 
 
 document_service = DocumentService(DocumentRepository())
