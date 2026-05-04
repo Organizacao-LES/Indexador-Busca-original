@@ -45,6 +45,7 @@ export type SearchResponse = {
   page: number;
   perPage: number;
   totalPages: number;
+  responseTimeMs: number;
   items: SearchResult[];
 };
 
