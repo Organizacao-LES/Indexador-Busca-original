@@ -28,6 +28,7 @@ from app.domain.notification import Notification
 from app.domain.search_history import SearchHistory
 from app.domain.term import Term
 from app.domain.user import User
+from app.domain.user_session import UserSession
 
 
 @asynccontextmanager

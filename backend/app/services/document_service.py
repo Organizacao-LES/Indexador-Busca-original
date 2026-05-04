@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 import time
 from datetime import date, datetime
 from mimetypes import guess_type
@@ -48,66 +49,74 @@ class DocumentService:
         document_id: int,
         file: UploadFile,
         updated_by: User,
-    ):
-        # Busca o documento ativo
-        document = db.query(Document).filter(
-        Document.cod_documento == document_id,
-        Document.ativo.is_(True)
-        ).first()
-
-       # Se não existir, lança exceção
-        if not document:
-            raise DocumentNotFoundException()
-
+        category: str | None = None,
+        document_date: date | None = None,
+        title: str | None = None,
+        author: str | None = None,
+        document_type: str | None = None,
+    ) -> dict:
+        document = self._get_document_or_raise(db, document_id)
+        metadata = self._get_or_create_metadata(db, document)
         filename = file.filename or ""
 
         try:
-               
-                #  Extrai e valida extensão do arquivo
-                extension = self._extract_extension(filename)
-                self._validate_extension(extension)
-                
-                # Obtém adapter responsável pelo tipo de documento
-                adapter = self.adapter_registry.get(extension)
-
-                # Lê conteúdo do arquivo
-                content = file.file.read()
-                # Valida tamanho do arquivo
-                self._validate_size(content)
-                # Valida integridade do arquivo (ex: PDF válido)
-                adapter.validate_integrity(content)
-
-                # Extrai texto do documento
-                extracted_content = adapter.extract_text(content)
-
+            extension = self._extract_extension(filename)
+            self._validate_extension(extension)
+            adapter = self.adapter_registry.get(extension)
+            content = file.file.read()
+            self._validate_size(content)
+            adapter.validate_integrity(content)
+            extracted_content = adapter.extract_text(content)
+        except DocumentValidationException as exc:
+            self._register_invalid_document(db, updated_by, filename, exc.detail)
+            raise
         finally:
-             #  Garante fechamento do arquivo
-                file.file.close()
-                
-                
-         #  desativa versão atual do documento
-        current_version = db.query(DocumentHistory).filter(
-            DocumentHistory.cod_documento == document_id,
-            DocumentHistory.versao_ativa.is_(True)
-        ).first()
+            file.file.close()
 
-        if current_version:
-            current_version.versao_ativa = False
-            
-            
-        # calcula nova versão
-        # Busca última versão para calcular próxima
-        last_version = db.query(DocumentHistory).filter(
-            DocumentHistory.cod_documento == document_id
-        ).order_by(DocumentHistory.numero_versao.desc()).first()
-
-        # Incrementa número da versão
-        new_version_number = (last_version.numero_versao if last_version else 0) + 1
-
-        # Armazena novo arquivo no sistema
         storage_path = self._store_file(content, extension)
+        file_hash = hashlib.sha256(content).hexdigest()
+        new_version_number = self._get_next_version_number(db, document_id)
 
-        # Cria nova versão no histórico
+        if category and category.strip():
+            category_row = self._get_or_create_category(db, category.strip())
+            document.cod_categoria = category_row.cod_categoria
+        document.titulo = self._normalize_metadata_value(
+            title,
+            fallback=document.titulo,
+            max_length=255,
+        )
+        document.tipo = extension.upper()
+        if document_date is not None:
+            document.data_publicacao = self._coerce_document_datetime(document_date)
+
+        metadata.autor = self._normalize_metadata_value(
+            author,
+            fallback=metadata.autor or updated_by.nome,
+            max_length=255,
+        )
+        metadata.tipo_documento = self._normalize_metadata_value(
+            document_type,
+            fallback=metadata.tipo_documento or extension.upper(),
+            max_length=100,
+        )
+        metadata.nome_arquivo_original = self._normalize_metadata_value(
+            filename,
+            fallback=metadata.nome_arquivo_original or f"{document.titulo}.{extension}",
+            max_length=255,
+        )
+        metadata.mime_type = self._normalize_metadata_value(
+            file.content_type,
+            fallback=adapter.mime_type,
+            max_length=255,
+        )
+        metadata.tamanho_bytes = len(content)
+        metadata.hash_arquivo = file_hash
+
+        db.query(DocumentHistory).filter(
+            DocumentHistory.cod_documento == document_id,
+            DocumentHistory.versao_ativa.is_(True),
+        ).update({"versao_ativa": False}, synchronize_session=False)
+
         new_history = DocumentHistory(
             cod_documento=document_id,
             cod_usuario=updated_by.cod_usuario,
@@ -117,32 +126,26 @@ class DocumentService:
             texto_processado=extracted_content,
             versao_ativa=True,
         )
-
         db.add(new_history)
         db.flush()
-        
-    
-        # Reindexa documento (atualiza índice invertido)
+
         index_service.reindex_document(
             db,
             document_id=document_id,
-            triggered_by=updated_by
+            triggered_by=updated_by,
         )
 
-        #  Persiste alterações
-        db.commit()
-        
-        # Registra ação administrativa
         administrative_history_service.log_action(
-        db,
-        actor=updated_by,
-        description=f"Documento {document.titulo} atualizado para versão {new_version_number}.",
-        action_type="Atualização",
-        entity_type="documento",
-        entity_id=document_id,
+            db,
+            actor=updated_by,
+            description=(
+                f"Documento {document.titulo} atualizado para versão "
+                f"{new_version_number}."
+            ),
+            action_type="Atualização",
+            entity_type="documento",
+            entity_id=document_id,
         )
-
-        # Retorna payload atualizado
         return self.get_document_payload(db, document_id)
 
 
@@ -152,32 +155,12 @@ class DocumentService:
         *,
         document_id: int,
         deleted_by: User,
-    ):
-        #  Busca documento ativo
-        document = db.query(Document).filter(
-        Document.cod_documento == document_id,
-        Document.ativo.is_(True)
-        ).first()
-
-        # Se não existir
-        if not document:
-            raise DocumentNotFoundException()
-
-        # 🚫 Marca como inativo (remoção lógica)
+    ) -> dict:
+        document = self._get_document_or_raise(db, document_id)
         document.ativo = False
-        
-        # reindexa (remove do índice)
-        # Atualiza índice para remover documento das buscas
-        index_service.reindex_document(
-            db,
-            document_id=document_id,
-            triggered_by=deleted_by
-        )
-
-        # Salva alterações
+        db.flush()
+        index_service.remove_document_from_index(db, document_id=document_id)
         db.commit()
-        
-        # Log administrativo
         administrative_history_service.log_action(
             db,
             actor=deleted_by,
@@ -187,18 +170,17 @@ class DocumentService:
             entity_id=document_id,
         )
 
-        return {"message": "Documento removido com sucesso."}
+        return {"message": "Documento removido logicamente com sucesso."}
 
 
-    def list_versions(self, db: Session, document_id: int):
-        
-          # Busca todas versões do documento
-        versions = db.query(DocumentHistory).filter(
-            DocumentHistory.cod_documento == document_id
-        ).order_by(DocumentHistory.numero_versao.desc()).all()
-
-
-        # Formata resposta
+    def list_versions(self, db: Session, document_id: int) -> list[dict]:
+        self._get_document_or_raise(db, document_id, active_only=False)
+        versions = (
+            db.query(DocumentHistory)
+            .filter(DocumentHistory.cod_documento == document_id)
+            .order_by(DocumentHistory.numero_versao.desc())
+            .all()
+        )
         return [
             {
                 "version": int(v.numero_versao),
@@ -207,8 +189,7 @@ class DocumentService:
             }
             for v in versions
         ]
-        
-        
+
     def restore_version(
         self,
         db: Session,
@@ -216,48 +197,40 @@ class DocumentService:
         document_id: int,
         version_number: int,
         restored_by: User,
-    ):
-        # Busca versão desejada
-        target_version = db.query(DocumentHistory).filter(
-        DocumentHistory.cod_documento == document_id,
-        DocumentHistory.numero_versao == version_number
-        ).first()
-
-        # Se não existir
+    ) -> dict:
+        document = self._get_document_or_raise(db, document_id, active_only=False)
+        target_version = (
+            db.query(DocumentHistory)
+            .filter(
+                DocumentHistory.cod_documento == document_id,
+                DocumentHistory.numero_versao == version_number,
+            )
+            .first()
+        )
         if not target_version:
             raise DocumentNotFoundException("Versão não encontrada.")
-        
-        
-        # Desativa versão atual
+
         db.query(DocumentHistory).filter(
             DocumentHistory.cod_documento == document_id,
-            DocumentHistory.versao_ativa.is_(True)
-        ).update({"versao_ativa": False})
-
-        # Ativa versão escolhida
+            DocumentHistory.versao_ativa.is_(True),
+        ).update({"versao_ativa": False}, synchronize_session=False)
         target_version.versao_ativa = True
-        
-        
-        # reindexa com conteúdo restaurado
+        document.ativo = True
+        db.flush()
+
         index_service.reindex_document(
             db,
             document_id=document_id,
-            triggered_by=restored_by
+            triggered_by=restored_by,
         )
-
-        # Salva alterações
-        db.commit()
-        
-        # Log administrativo
         administrative_history_service.log_action(
-        db,
-        actor=restored_by,
-        description=f"Documento restaurado para versão {version_number}.",
-        action_type="Restauração",
-        entity_type="documento",
-        entity_id=document_id,
+            db,
+            actor=restored_by,
+            description=f"Documento restaurado para versão {version_number}.",
+            action_type="Restauração",
+            entity_type="documento",
+            entity_id=document_id,
         )
-        # Retorna documento atualizado
         return self.get_document_payload(db, document_id)
 
 
@@ -298,7 +271,7 @@ class DocumentService:
         storage_path = self._store_file(content, extension)
         document_title = self._normalize_metadata_value(
             title,
-            fallback=Path(filename).stem or f"documento-{uuid4().hex[:8]}",
+            fallback=self._build_default_title(filename),
             max_length=255,
         )
         document_author = self._normalize_metadata_value(
@@ -489,8 +462,18 @@ class DocumentService:
             "items": items,
         }
 
-    def get_document_payload(self, db: Session, document_id: int) -> dict:
-        payload = self.document_repository.get_document_payload(db, document_id)
+    def get_document_payload(
+        self,
+        db: Session,
+        document_id: int,
+        *,
+        active_only: bool = True,
+    ) -> dict:
+        payload = self.document_repository.get_document_payload(
+            db,
+            document_id,
+            active_only=active_only,
+        )
         if payload is None:
             raise DocumentNotFoundException()
         return payload
@@ -507,7 +490,10 @@ class DocumentService:
 
     def export_document(self, db: Session, *, document_id: int, export_format: str) -> tuple[str, str, str]:
         payload = self.get_document_payload(db, document_id)
-        safe_title = self._safe_export_filename(payload["title"])
+        display_title = self._build_display_title(payload["title"], payload["file_name"])
+        formatted_content = self._format_content_for_reading(payload["content"])
+        preview_content = formatted_content or "Pré-visualização indisponível para este formato."
+        safe_title = self._safe_export_filename(display_title)
 
         if export_format == "json":
             content = json.dumps(
@@ -518,7 +504,7 @@ class DocumentService:
             return content, f"{safe_title}.json", "application/json; charset=utf-8"
 
         metadata = [
-            f"Título: {payload['title']}",
+            f"Título: {display_title}",
             f"Categoria: {payload['category']}",
             f"Tipo documental: {payload['document_type']}",
             f"Formato: {payload['type']}",
@@ -531,7 +517,7 @@ class DocumentService:
             f"Data do documento: {payload['document_date'] or payload['uploaded_at']}",
             "",
             "Conteúdo extraído:",
-            payload["content"] or "Pré-visualização indisponível para este formato.",
+            preview_content,
         ]
         return "\n".join(metadata), f"{safe_title}.txt", "text/plain; charset=utf-8"
 
@@ -606,7 +592,12 @@ class DocumentService:
             if payload["document_date"]
             else payload["uploaded_at"].isoformat()
         )
-        extracted_characters = len(payload["content"] or "")
+        raw_content = payload["content"] or ""
+        formatted_content = self._format_content_for_reading(raw_content)
+        preview_content = raw_content or "Pré-visualização indisponível para este formato."
+        readable_content = formatted_content or preview_content
+        display_title = self._build_display_title(payload["title"], payload["file_name"])
+        extracted_characters = len(raw_content)
         file_path = Path(payload["file_path"])
         download_url = (
             f"/api/v1/documents/{payload['id']}/download"
@@ -616,6 +607,7 @@ class DocumentService:
         return {
             "id": payload["id"],
             "title": payload["title"],
+            "displayTitle": display_title,
             "fileName": payload["file_name"],
             "category": payload["category"],
             "type": payload["type"],
@@ -632,7 +624,8 @@ class DocumentService:
             "size": self._format_size(payload["size_bytes"]),
             "hash": payload["file_hash"],
             "downloadUrl": download_url,
-            "content": payload["content"] or "Pré-visualização indisponível para este formato.",
+            "content": preview_content,
+            "formattedContent": readable_content,
             "extractedCharacters": extracted_characters,
         }
 
@@ -687,6 +680,52 @@ class DocumentService:
         db.add(status)
         db.flush()
         return status
+
+    def _get_document_or_raise(
+        self,
+        db: Session,
+        document_id: int,
+        *,
+        active_only: bool = True,
+    ) -> Document:
+        query = db.query(Document).filter(Document.cod_documento == document_id)
+        if active_only:
+            query = query.filter(Document.ativo.is_(True))
+        document = query.first()
+        if document is None:
+            raise DocumentNotFoundException()
+        return document
+
+    def _get_or_create_metadata(self, db: Session, document: Document) -> DocumentMetadata:
+        metadata = (
+            db.query(DocumentMetadata)
+            .filter(DocumentMetadata.cod_documento == document.cod_documento)
+            .first()
+        )
+        if metadata is not None:
+            return metadata
+
+        metadata = DocumentMetadata(
+            cod_documento=document.cod_documento,
+            autor=None,
+            tipo_documento=document.tipo,
+            nome_arquivo_original=f"{document.titulo}.{document.tipo.lower()}",
+            mime_type=self._get_mime_type(document.tipo.lower()),
+            tamanho_bytes=0,
+            hash_arquivo="",
+        )
+        db.add(metadata)
+        db.flush()
+        return metadata
+
+    def _get_next_version_number(self, db: Session, document_id: int) -> int:
+        last_version = (
+            db.query(DocumentHistory)
+            .filter(DocumentHistory.cod_documento == document_id)
+            .order_by(DocumentHistory.numero_versao.desc())
+            .first()
+        )
+        return int(last_version.numero_versao if last_version else 0) + 1
 
     def _register_invalid_document(
         self, db: Session, uploaded_by: User, filename: str, reason: str
@@ -746,6 +785,149 @@ class DocumentService:
     def _safe_export_filename(self, value: str) -> str:
         safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in value.strip())
         return safe.strip("_") or "documento"
+
+    def _build_default_title(self, filename: str) -> str:
+        stem = Path(filename).stem.strip()
+        if not stem:
+            stem = f"documento-{uuid4().hex[:8]}"
+        return self._build_display_title(stem, filename)
+
+    def _build_display_title(self, title: str | None, file_name: str | None = None) -> str:
+        candidate = (title or "").strip()
+        if not candidate and file_name:
+            candidate = Path(file_name).stem.strip()
+        if not candidate:
+            return "Documento"
+
+        normalized_stem = self._normalize_title_key(Path(file_name).stem) if file_name else ""
+        should_humanize = "_" in candidate or (
+            normalized_stem
+            and normalized_stem == self._normalize_title_key(candidate)
+            and candidate.count("-") >= 2
+            and " " not in candidate
+        )
+        if not should_humanize:
+            return candidate
+
+        readable = candidate.replace("_", " ")
+        if " " not in readable and readable.count("-") >= 2:
+            readable = readable.replace("-", " ")
+        readable = re.sub(r"\s+", " ", readable).strip()
+        if readable and readable[0].islower():
+            readable = readable[0].upper() + readable[1:]
+        return readable or candidate
+
+    def _normalize_title_key(self, value: str) -> str:
+        return re.sub(r"[\W_]+", "", (value or "").casefold())
+
+    def _format_content_for_reading(self, content: str | None) -> str:
+        text = (content or "").replace("\r\n", "\n").replace("\r", "\n").replace("\u00a0", " ").strip()
+        if not text:
+            return ""
+
+        text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+        text = re.sub(r"[ \t]+\n", "\n", text)
+        text = re.sub(r"\n[ \t]+", "\n", text)
+        text = re.sub(r"[ \t]{2,}", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        blocks: list[str] = []
+        buffer = ""
+
+        def flush_buffer() -> None:
+            nonlocal buffer
+            normalized = buffer.strip()
+            if normalized:
+                blocks.append(normalized)
+            buffer = ""
+
+        for raw_line in text.split("\n"):
+            line = self._normalize_reading_line(raw_line)
+            if not line:
+                flush_buffer()
+                continue
+            if self._should_skip_reading_line(line):
+                continue
+            if self._is_heading_line(line):
+                flush_buffer()
+                blocks.append(line)
+                continue
+            if not buffer:
+                buffer = line
+                continue
+            if self._is_block_start(line):
+                flush_buffer()
+                buffer = line
+                continue
+            if self._should_merge_reading_line(buffer, line):
+                if buffer.endswith("-") and line[:1].islower():
+                    buffer = f"{buffer[:-1]}{line}"
+                else:
+                    buffer = f"{buffer} {line}"
+                continue
+            flush_buffer()
+            buffer = line
+
+        flush_buffer()
+        return "\n\n".join(blocks)
+
+    def _normalize_reading_line(self, line: str) -> str:
+        normalized = re.sub(r"\s+", " ", (line or "").strip())
+        normalized = re.sub(r"\s+([,.;:!?])", r"\1", normalized)
+        return normalized
+
+    def _should_skip_reading_line(self, line: str) -> bool:
+        if re.fullmatch(r"\d{1,3}", line):
+            return True
+        return bool(re.fullmatch(r"p[aá]gina\s+\d+(?:\s+de\s+\d+)?", line, flags=re.IGNORECASE))
+
+    def _is_heading_line(self, line: str) -> bool:
+        if not line:
+            return False
+        if self._is_block_start(line):
+            return False
+        if re.match(
+            r"^(MINIST[ÉE]RIO|SECRETARIA|INSTITUTO|CAMPUS|CONSELHO|COMISS[ÃA]O|"
+            r"PR[ÓO]-REITORIA|PROGRAMA|ANEXO|AP[ÊE]NDICE|CAP[ÍI]TULO|SE[ÇC][ÃA]O|"
+            r"T[IÍ]TULO|CONSIDERANDO|RESOLVE)\b",
+            line,
+            flags=re.IGNORECASE,
+        ):
+            return True
+        if len(line) > 90:
+            return False
+        if "," in line:
+            return False
+
+        words = re.findall(r"[A-Za-zÀ-ÿ0-9ºª]+", line)
+        if not words or len(words) > 12:
+            return False
+
+        alpha_chars = [char for char in line if char.isalpha()]
+        if alpha_chars:
+            uppercase_ratio = sum(char.isupper() for char in alpha_chars) / len(alpha_chars)
+            if uppercase_ratio >= 0.72:
+                return True
+
+        capitalized_words = sum(word[:1].isupper() for word in words if word[:1].isalpha())
+        return capitalized_words >= max(2, int(len(words) * 0.6))
+
+    def _is_block_start(self, line: str) -> bool:
+        return bool(
+            re.match(
+                r"^(Art\.?\s*\d+[ºo°]?\b|Artigo\s+\d+\b|Par[aá]grafo\s+[úu]nico\b|"
+                r"§+\s*\d*[ºo°]?\b|[IVXLCDM]+\s*-\s+|[a-z]\)\s+|\d+\)\s+|\d+\.\s+)",
+                line,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _should_merge_reading_line(self, current_block: str, next_line: str) -> bool:
+        if not current_block or not next_line:
+            return False
+        if current_block.endswith(":"):
+            return False
+        return not bool(re.search(r"[.!?;]$", current_block))
 
     def _normalize_metadata_value(
         self,

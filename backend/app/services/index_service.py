@@ -23,6 +23,7 @@ from app.pipeline.stages import (
 )
 from app.repositories.document_repository import DocumentRepository
 from app.services.administrative_history_service import administrative_history_service
+from app.services.inverted_index_service import inverted_index_service
 
 
 class IndexService:
@@ -66,13 +67,10 @@ class IndexService:
 
         started_at = time.perf_counter()
         payload = self.document_repository.get_document_payload(db, document_id)
-        metadata_text = self._metadata_text(payload) if payload else ""
         context = {
             "document_id": document.cod_documento,
             "document_history": document_history,
-            "extracted_text": "\n".join(
-                part for part in [metadata_text, document_history.texto_extraido or ""] if part
-            ),
+            "field_texts": self._build_search_fields(payload, document_history),
         }
 
         try:
@@ -115,22 +113,42 @@ class IndexService:
             "tokenCount": result["token_count"],
         }
 
-    def _metadata_text(self, payload: dict) -> str:
-        metadata_values = [
-            payload.get("title"),
-            payload.get("author_name"),
-            payload.get("category"),
-            payload.get("document_type"),
-            payload.get("file_name"),
+    def _build_search_fields(
+        self,
+        payload: dict | None,
+        document_history: DocumentHistory,
+    ) -> list[dict]:
+        payload = payload or {}
+        candidates = [
+            ("titulo", payload.get("title")),
+            ("autor", payload.get("author_name")),
+            ("categoria", payload.get("category")),
+            ("tipo_documento", payload.get("document_type")),
+            ("arquivo", payload.get("file_name")),
+            ("conteudo", document_history.texto_extraido or ""),
         ]
-        return "\n".join(str(value) for value in metadata_values if value)
+        return [
+            {
+                "field_type": field_type,
+                "text": str(value),
+            }
+            for field_type, value in candidates
+            if value
+        ]
 
     def reindex_document(self, db: Session, *, document_id: int, triggered_by: User) -> dict:
+        inverted_index_service.remove_document_terms(db, document_id=document_id)
         return self.process_document(
             db,
             document_id=document_id,
             triggered_by=triggered_by,
             trigger_label="Reindexação",
+        )
+
+    def remove_document_from_index(self, db: Session, *, document_id: int) -> dict:
+        return inverted_index_service.remove_document_terms(
+            db,
+            document_id=document_id,
         )
 
     def reindex_all_documents(self, db: Session, *, triggered_by: User) -> dict:
