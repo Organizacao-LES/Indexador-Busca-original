@@ -340,7 +340,7 @@ class SearchService:
         query: str,
         filters: str | None,
         result_count: int,
-        started_at: float,
+        response_time_ms: int,
     ) -> None:
         self.repository.create_search_history(
             db,
@@ -348,7 +348,7 @@ class SearchService:
             query=query,
             filters=filters,
             result_count=result_count,
-            response_time_ms=int((time.perf_counter() - started_at) * 1000),
+            response_time_ms=response_time_ms,
         )
 
     def _serialize_filters(
