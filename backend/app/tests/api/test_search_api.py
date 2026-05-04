@@ -130,6 +130,7 @@ def test_search_returns_ranked_documents_and_recent_history(tmp_path: Path):
         payload = search_response.json()
         assert payload["query"] == "pesquisa ifes"
         assert payload["total"] >= 2
+        assert payload["responseTimeMs"] >= 0
         assert payload["items"][0]["relevance"] >= payload["items"][-1]["relevance"]
         assert payload["items"][0]["type"] == "TXT"
 

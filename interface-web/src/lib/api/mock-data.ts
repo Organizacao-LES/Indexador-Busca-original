@@ -180,6 +180,7 @@ export const mockSearch = (
     page: safePage,
     perPage,
     totalPages,
+    responseTimeMs: 150 + Math.floor(Math.random() * 100),
     items: filtered.slice(start, start + perPage),
   };
 };

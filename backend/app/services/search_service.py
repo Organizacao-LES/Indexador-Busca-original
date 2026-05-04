@@ -111,12 +111,14 @@ class SearchService:
                     }
                 )
 
+        response_time_ms = int((time.perf_counter() - started_at) * 1000)
         response = {
             "query": query,
             "total": len(ranked_docs),
             "page": page,
             "perPage": limit,
             "totalPages": max(math.ceil(len(ranked_docs) / limit), 1),
+            "responseTimeMs": response_time_ms,
             "items": items,
         }
         self._register_search(
@@ -132,7 +134,7 @@ class SearchService:
                 sort_by,
             ),
             result_count=len(ranked_docs),
-            started_at=started_at,
+            response_time_ms=response_time_ms,
         )
         return response
 
@@ -246,7 +248,7 @@ class SearchService:
         query: str,
         filters: str | None,
         result_count: int,
-        started_at: float,
+        response_time_ms: int,
     ) -> None:
         self.repository.create_search_history(
             db,
@@ -254,7 +256,7 @@ class SearchService:
             query=query,
             filters=filters,
             result_count=result_count,
-            response_time_ms=int((time.perf_counter() - started_at) * 1000),
+            response_time_ms=response_time_ms,
         )
 
     def _serialize_filters(

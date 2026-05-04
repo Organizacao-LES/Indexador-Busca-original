@@ -84,6 +84,7 @@ def test_search_service_applies_author_filter_and_records_history(tmp_path):
         )
 
         assert result["total"] == 1
+        assert result["responseTimeMs"] >= 0
         assert result["items"][0]["author"] == "Maria de Souza"
         assert result["items"][0]["category"] == "pesquisa"
 
