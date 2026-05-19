@@ -6,48 +6,80 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.domain.document import Document
-from app.domain.document_category import DocumentCategory
-from app.domain.search_history import SearchHistory
+from app.repositories.metrics_repository import MetricsRepository
 from app.services.index_service import index_service
 from app.utils.text_processing import preprocess_for_indexing
 
 
 class MetricsService:
+    
+    # Injeta o repository seguindo o padrão do projeto
+    def __init__(self, metrics_repository: MetricsRepository):
+        self.metrics_repository = metrics_repository
+
+    
+    # Método principal responsável por montar o snapshot completo
+    # de métricas e indicadores de desempenho da busca
     def snapshot(self, db: Session) -> dict:
+        
+        # Obtém métricas do serviço de indexação
         index_snapshot = index_service.get_status_snapshot(db)
-        total_queries = db.query(func.count(SearchHistory.cod_historico_busca)).scalar() or 0
-        average_search_time = db.query(func.avg(SearchHistory.tempo_resposta_ms)).scalar()
-        average_results = db.query(func.avg(SearchHistory.quantidade_resultados)).scalar()
-        queries_without_results = (
-            db.query(func.count(SearchHistory.cod_historico_busca))
-            .filter(SearchHistory.quantidade_resultados <= 0)
-            .scalar()
-            or 0
+        
+        # Total de consultas realizadas
+        total_queries = self.metrics_repository.get_total_queries(db)
+        
+        
+        # Tempo médio de resposta das buscas
+        average_search_time = (
+            self.metrics_repository.get_average_search_time(db)
         )
+        
+        
+        # Média de resultados retornados por consulta
+        average_results = (
+            self.metrics_repository.get_average_results(db)
+        )
+        
+        
+        
+         # Quantidade de buscas sem resultado
+        queries_without_results = (
+            self.metrics_repository.get_queries_without_results(db)
+        )
+        
+       
+        
+        
+        # Taxa percentual de buscas sem resultado
         zero_results_rate = (
             (queries_without_results / total_queries) * 100
             if total_queries
             else 0
         )
 
-        today = date.today()
-        queries_today = (
-            db.query(func.count(SearchHistory.cod_historico_busca))
-            .filter(func.date(SearchHistory.criado_em) == today.isoformat())
-            .scalar()
-            or 0
-        )
 
+        # Data atual
+        today = date.today()
+        
+         # Quantidade de consultas realizadas hoje
+        queries_today = self.metrics_repository.get_queries_today(
+            db,
+            today,
+        )
+        
+
+
+        # Histórico de consultas dos últimos 7 dias
         queries_by_day = []
         for days_ago in range(6, -1, -1):
             current_day = today - timedelta(days=days_ago)
-            count = (
-                db.query(func.count(SearchHistory.cod_historico_busca))
-                .filter(func.date(SearchHistory.criado_em) == current_day.isoformat())
-                .scalar()
-                or 0
+            
+            
+            count = self.metrics_repository.get_queries_count_by_day(
+                db,
+                current_day,
             )
+            
             queries_by_day.append(
                 {
                     "day": current_day.strftime("%d/%m"),
@@ -55,32 +87,43 @@ class MetricsService:
                 }
             )
 
+
+        # Contador de frequência de termos buscados
         term_counter: Counter[str] = Counter()
-        recent_queries = db.query(SearchHistory.consulta_texto).all()
+        # Recupera todas as consultas realizadas
+        recent_queries = self.metrics_repository.get_all_queries(db)
+
+        
+        # Processa os tokens das consultas  
         for row in recent_queries:
-            for token in preprocess_for_indexing(row.consulta_texto or "")["tokens"]:
+            
+            processed = preprocess_for_indexing( 
+                row.consulta_texto or ""
+            )
+            
+            for token in processed["tokens"]:
                 term_counter[token] += 1
 
+
+        # Top 5 termos mais pesquisados
         top_terms = [
             {"name": term, "value": count}
             for term, count in term_counter.most_common(5)
         ]
 
+        # Quantidade de documentos agrupados por categoria
         documents_by_category_rows = (
-            db.query(
-                DocumentCategory.nome_categoria,
-                func.count(Document.cod_documento),
-            )
-            .join(Document, Document.cod_categoria == DocumentCategory.cod_categoria)
-            .filter(Document.ativo.is_(True))
-            .group_by(DocumentCategory.nome_categoria)
-            .order_by(func.count(Document.cod_documento).desc())
-            .all()
+            self.metrics_repository.get_documents_by_category(db)
         )
+               
+        
         documents_by_category = [
             {"name": row[0], "value": row[1]}
             for row in documents_by_category_rows
         ]
+       
+        
+        # Distribuição das consultas
         query_outcome_distribution = [
             {
                 "name": "Com resultados",
@@ -92,6 +135,8 @@ class MetricsService:
             },
         ]
 
+
+        # Snapshot consolidado
         return {
             "overview": {
                 "totalQueries": total_queries,
@@ -109,6 +154,8 @@ class MetricsService:
             "queryOutcomeDistribution": query_outcome_distribution,
         }
 
+
+    # Formata tempo de duração para ms ou segundos
     def _format_duration(self, duration_ms: float | None) -> str:
         if duration_ms is None:
             return "0 ms"
@@ -118,4 +165,6 @@ class MetricsService:
         return f"{duration_ms:.0f} ms"
 
 
-metrics_service = MetricsService()
+metrics_service = MetricsService(
+    MetricsRepository()
+)
