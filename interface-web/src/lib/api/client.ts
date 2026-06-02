@@ -1,4 +1,5 @@
 import { appEnv } from "@/lib/env";
+import { storageKeys } from "@/lib/storage";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -10,8 +11,14 @@ type RequestOptions = {
   query?: Record<string, string | number | undefined>;
 };
 
+export const authSessionExpiredEvent = "ifesdoc:session-expired";
+
+const clearStoredSession = () => {
+  localStorage.removeItem(storageKeys.session);
+};
+
 const readStoredToken = () => {
-  const raw = localStorage.getItem("ifesdoc.session");
+  const raw = localStorage.getItem(storageKeys.session);
   if (!raw) {
     return null;
   }
@@ -24,7 +31,14 @@ const readStoredToken = () => {
   }
 };
 
-const buildUrl = (path: string, query?: RequestOptions["query"]) => {
+const notifyUnauthorized = () => {
+  clearStoredSession();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(authSessionExpiredEvent));
+  }
+};
+
+export const buildApiUrl = (path: string, query?: RequestOptions["query"]) => {
   const url = new URL(path, appEnv.apiBaseUrl);
 
   if (query) {
@@ -52,7 +66,7 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const token = options.token ?? readStoredToken();
 
-  const response = await fetch(buildUrl(path, options.query), {
+  const response = await fetch(buildApiUrl(path, options.query), {
     method: options.method || "GET",
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
@@ -63,6 +77,9 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      notifyUnauthorized();
+    }
     let message = "Falha ao comunicar com a API.";
 
     try {
@@ -84,4 +101,44 @@ export const apiRequest = async <T>(path: string, options: RequestOptions = {}):
   }
 
   return response.json() as Promise<T>;
+};
+
+const readFilenameFromDisposition = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const match = value.match(/filename="?([^"]+)"?/i);
+  return match?.[1] ?? null;
+};
+
+export const apiBlobRequest = async (
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ blob: Blob; filename: string | null }> => {
+  const token = options.token ?? readStoredToken();
+  const response = await fetch(buildApiUrl(path, options.query), {
+    method: options.method || "GET",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      notifyUnauthorized();
+    }
+    throw new ApiError("Falha ao baixar o arquivo solicitado.", response.status);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: readFilenameFromDisposition(response.headers.get("Content-Disposition")),
+  };
 };

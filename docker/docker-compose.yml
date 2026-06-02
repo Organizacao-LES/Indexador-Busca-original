@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ifesdoc_user
       POSTGRES_PASSWORD: ifesdoc_pass
     ports:
-      - "5433:5432"
+      - "${IFESDOC_POSTGRES_PORT:-55433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
@@ -25,18 +25,43 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
+    image: ifesdoc_backend:local
     container_name: ifesdoc_backend
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://ifesdoc_user:ifesdoc_pass@postgres:5432/ifesdoc
-      SECRET_KEY: change_this_secret
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY com pelo menos 32 caracteres antes de iniciar o ambiente}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Defina uma senha inicial forte para o administrador}
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       BACKEND_CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
+      DOCUMENT_UPLOAD_DIR: /app/storage/documents
     ports:
       - "8000:8000"
+    volumes:
+      - document_storage:/app/storage/documents
+    networks:
+      - ifesdoc_net
+
+  notification-worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: ifesdoc_backend:local
+    container_name: ifesdoc_notification_worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ifesdoc_user:ifesdoc_pass@postgres:5432/ifesdoc
+      SECRET_KEY: ${SECRET_KEY:?Defina SECRET_KEY com pelo menos 32 caracteres antes de iniciar o ambiente}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      NOTIFICATION_WORKER_INTERVAL_SECONDS: 60
+    command: ["python", "-m", "app.workers.notification_worker"]
+    restart: unless-stopped
     networks:
       - ifesdoc_net
 
@@ -66,7 +91,7 @@ services:
       POSTGRES_PASSWORD: sonarqube
 
     ports:
-      - "5434:5432"
+      - "${IFESDOC_SONAR_POSTGRES_PORT:-55434}:5432"
 
     volumes:
       - sonarqube_postgres_data:/var/lib/postgresql/data
@@ -118,6 +143,7 @@ services:
 
 volumes:
   postgres_data:
+  document_storage:
   sonarqube_postgres_data:
   sonarqube_data:
   sonarqube_extensions:

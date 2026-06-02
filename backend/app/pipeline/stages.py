@@ -1,25 +1,41 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
-from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
 
-from app.domain.document import Document
-from app.domain.document_field import DocumentField
 from app.domain.document_history import DocumentHistory
-from app.domain.field_type import FieldType
-from app.domain.inverted_index import InvertedIndex
-from app.domain.term import Term
 from app.exceptions.document_exceptions import DocumentValidationException
 from app.pipeline.pipeline_stage import PipelineStage
+from app.services.inverted_index_service import inverted_index_service
 from app.utils.text_processing import preprocess_for_indexing
 
 
 class TextPreprocessStage(PipelineStage):
     def execute(self, db: Session, context: dict) -> dict:
         del db
+        field_texts = context.get("field_texts")
+        if field_texts:
+            preprocessed_fields: list[dict] = []
+            for field in field_texts:
+                text = field.get("text", "")
+                preprocessed = preprocess_for_indexing(text)
+                if preprocessed["tokens"]:
+                    preprocessed_fields.append(
+                        {
+                            "field_type": field["field_type"],
+                            **preprocessed,
+                        }
+                    )
+
+            if not preprocessed_fields:
+                raise DocumentValidationException(
+                    "Não foi possível gerar conteúdo processável para indexação."
+                )
+
+            context["preprocessed_fields"] = preprocessed_fields
+            return context
+
         extracted_text = context.get("extracted_text", "")
         preprocessed = preprocess_for_indexing(extracted_text)
         if not preprocessed["normalized_text"]:
@@ -34,6 +50,19 @@ class TextPreprocessStage(PipelineStage):
 class TextTokenizeStage(PipelineStage):
     def execute(self, db: Session, context: dict) -> dict:
         del db
+        preprocessed_fields = context.get("preprocessed_fields")
+        if preprocessed_fields:
+            total_tokens = sum(field["token_count"] for field in preprocessed_fields)
+            if total_tokens <= 0:
+                raise DocumentValidationException(
+                    "O documento não contém termos válidos para indexação."
+                )
+            context["index_fields"] = preprocessed_fields
+            context["processed_text"] = "\n".join(
+                field["processed_text"] for field in preprocessed_fields if field["processed_text"]
+            )
+            return context
+
         preprocessed = context.get("preprocessed_output") or preprocess_for_indexing(
             context.get("extracted_text", "")
         )
@@ -51,113 +80,30 @@ class TextTokenizeStage(PipelineStage):
 class RelationalIndexPersistStage(PipelineStage):
     def execute(self, db: Session, context: dict) -> dict:
         history: DocumentHistory = context["document_history"]
-        processed_text: str = context["processed_text"]
-        tokens: list[str] = context["tokens"]
-
-        history.texto_processado = processed_text
-
-        field_type = (
-            db.query(FieldType)
-            .filter(FieldType.tipo_campo == "conteudo")
-            .first()
-        )
-        if field_type is None:
-            field_type = FieldType(tipo_campo="conteudo")
-            db.add(field_type)
-            db.flush()
-
-        existing_field_ids = [
-            row.cod_campo_documento
-            for row in db.query(DocumentField.cod_campo_documento)
-            .filter(DocumentField.cod_historico_documento == history.cod_historico_documento)
-            .all()
-        ]
-        affected_term_ids: set[int] = set()
-        if existing_field_ids:
-            affected_term_ids.update(
-                row.cod_termo
-                for row in db.query(InvertedIndex.cod_termo)
-                .filter(InvertedIndex.cod_campo_documento.in_(existing_field_ids))
-                .distinct()
-                .all()
+        index_fields = context.get("index_fields")
+        if index_fields:
+            result = inverted_index_service.persist_document_fields(
+                db,
+                history=history,
+                fields=index_fields,
             )
-            db.query(InvertedIndex).filter(
-                InvertedIndex.cod_campo_documento.in_(existing_field_ids)
-            ).delete(synchronize_session=False)
-            db.query(DocumentField).filter(
-                DocumentField.cod_campo_documento.in_(existing_field_ids)
-            ).delete(synchronize_session=False)
+            context["term_count"] = result["term_count"]
+            context["token_count"] = result["token_count"]
+            return context
 
-        document_field = DocumentField(
-            cod_historico_documento=history.cod_historico_documento,
-            cod_tipo_campo=field_type.cod_tipo_campo,
-            conteudo=processed_text,
-        )
-        db.add(document_field)
-        db.flush()
+        processed_text: str = context["processed_text"]
 
         index_payload = context.get("index_payload") or {
             "positions_by_term": defaultdict(list)
         }
         positions_by_term: dict[str, list[int]] = index_payload["positions_by_term"]
-
-        for token, positions in positions_by_term.items():
-            term = db.query(Term).filter(Term.texto_termo == token).first()
-            if term is None:
-                term = Term(texto_termo=token, df=0, idf=0)
-                db.add(term)
-                db.flush()
-
-            db.add(
-                InvertedIndex(
-                    cod_termo=term.cod_termo,
-                    cod_campo_documento=document_field.cod_campo_documento,
-                    tf=len(positions),
-                    posicao_inicial=positions[0],
-                )
-            )
-            affected_term_ids.add(term.cod_termo)
-
-        db.flush()
-
-        active_document_count = (
-            db.query(func.count(Document.cod_documento))
-            .filter(Document.ativo.is_(True))
-            .scalar()
-            or 0
+        result = inverted_index_service.persist_document_terms(
+            db,
+            history=history,
+            processed_text=processed_text,
+            positions_by_term=positions_by_term,
         )
 
-        for term_id in affected_term_ids:
-            term = db.query(Term).filter(Term.cod_termo == term_id).first()
-            if term is None:
-                continue
-
-            document_frequency = (
-                db.query(func.count(distinct(Document.cod_documento)))
-                .select_from(InvertedIndex)
-                .join(
-                    DocumentField,
-                    DocumentField.cod_campo_documento == InvertedIndex.cod_campo_documento,
-                )
-                .join(
-                    DocumentHistory,
-                    DocumentHistory.cod_historico_documento == DocumentField.cod_historico_documento,
-                )
-                .join(Document, Document.cod_documento == DocumentHistory.cod_documento)
-                .filter(InvertedIndex.cod_termo == term.cod_termo)
-                .filter(Document.ativo.is_(True))
-                .filter(DocumentHistory.versao_ativa.is_(True))
-                .scalar()
-                or 0
-            )
-
-            term.df = document_frequency
-            if document_frequency > 0 and active_document_count > 0:
-                scaled_idf = math.log((active_document_count + 1) / (document_frequency + 1) + 1)
-                term.idf = max(int(round(scaled_idf * 1000)), 1)
-            else:
-                term.idf = 0
-
-        context["term_count"] = index_payload["term_count"]
-        context["token_count"] = index_payload["token_count"]
+        context["term_count"] = index_payload.get("term_count", result["term_count"])
+        context["token_count"] = index_payload.get("token_count", result["token_count"])
         return context

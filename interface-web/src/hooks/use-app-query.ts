@@ -5,11 +5,13 @@ import {
   indexService,
   ingestionService,
   metricsService,
+  notificationService,
   searchService,
   settingsService,
   userService,
 } from "@/lib/api/services";
-import type { SearchFilters } from "@/types/app";
+import type { AdministrativeHistoryFilters, SearchFilters, SearchHistoryFilters } from "@/types/app";
+import type { MetricsReportFilters } from "@/types/app";
 
 export const useRecentSearches = () =>
   useQuery({
@@ -24,10 +26,23 @@ export const useSearchResults = (query: string, filters: SearchFilters) =>
     enabled: !!query.trim(),
   });
 
-export const useDocument = (id: number) =>
+export const useSearchHistory = (filters: SearchHistoryFilters) =>
   useQuery({
-    queryKey: ["document", id],
-    queryFn: () => documentService.getById(id),
+    queryKey: ["search-history", filters],
+    queryFn: () => searchService.history(filters),
+  });
+
+export const useDocument = (id: number, version?: number) =>
+  useQuery({
+    queryKey: ["document", id, version ?? "active"],
+    queryFn: () => documentService.getById(id, version),
+    enabled: Number.isFinite(id),
+  });
+
+export const useDocumentVersions = (id: number) =>
+  useQuery({
+    queryKey: ["document-versions", id],
+    queryFn: () => documentService.versions(id),
     enabled: Number.isFinite(id),
   });
 
@@ -62,10 +77,31 @@ export const useMetrics = () =>
     queryFn: () => metricsService.snapshot(),
   });
 
-export const useHistory = () =>
+export const useMetricsReport = (filters: MetricsReportFilters) =>
   useQuery({
-    queryKey: ["history"],
-    queryFn: () => historyService.list(),
+    queryKey: ["metrics-report", filters],
+    queryFn: () => metricsService.report(filters),
+  });
+
+export const useMetricCalculations = (limit = 10) =>
+  useQuery({
+    queryKey: ["metric-calculations", limit],
+    queryFn: () => metricsService.calculations(limit),
+  });
+
+export const useHistory = (filters: AdministrativeHistoryFilters = {}, enabled = true) =>
+  useQuery({
+    queryKey: ["history", filters],
+    queryFn: () => historyService.list(filters),
+    enabled,
+  });
+
+export const useNotifications = (enabled = true) =>
+  useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => notificationService.list(),
+    enabled,
+    refetchInterval: 30000,
   });
 
 export const useSettings = () =>
