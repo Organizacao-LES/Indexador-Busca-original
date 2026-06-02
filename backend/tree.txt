@@ -1,0 +1,112 @@
+backend
+├── Dockerfile
+├── Dockerfile.windows
+├── app
+│   ├── __init__.py
+│   ├── adapters
+│   │   └── __init__.py
+│   ├── api
+│   │   └── v1
+│   │       ├── __init__.py
+│   │       ├── auth_routes.py
+│   │       ├── document_routes.py
+│   │       ├── ingestion_routes.py
+│   │       ├── router.py
+│   │       └── user_routes.py
+│   ├── core
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── dependencies.py
+│   │   └── security.py
+│   ├── domain
+│   │   ├── __init__.py
+│   │   ├── document.py
+│   │   ├── document_category.py
+│   │   ├── document_history.py
+│   │   ├── ingestion_history.py
+│   │   ├── ingestion_status.py
+│   │   ├── invalid_document.py
+│   │   ├── user.py
+│   │   └── user_role.py
+│   ├── exceptions
+│   │   ├── __init__.py
+│   │   ├── document_exceptions.py
+│   │   └── user_exceptions.py
+│   ├── freeze_generate.cmd
+│   ├── freeze_generated_requirements.txt
+│   ├── gemini.md
+│   ├── main.py
+│   ├── pipeline
+│   │   └── __init__.py
+│   ├── repositories
+│   │   ├── __init__.py
+│   │   ├── document_repository.py
+│   │   └── user_repository.py
+│   ├── schemas
+│   │   ├── __init__.py
+│   │   ├── auth_schema.py
+│   │   ├── document_schema.py
+│   │   └── user_schema.py
+│   ├── services
+│   │   ├── __init__.py
+│   │   ├── auth_service.py
+│   │   ├── document_service.py
+│   │   └── user_service.py
+│   ├── start-agent-gemini.cmd
+│   ├── strategies
+│   │   └── __init__.py
+│   ├── tests
+│   │   ├── __init__.py
+│   │   ├── api
+│   │   │   ├── test_auth_user_api.py
+│   │   │   └── test_ingestion_api.py
+│   │   └── services
+│   │       ├── __init__.py
+│   │       └── test_user_service.py
+│   └── utils
+│       ├── __init__.py
+│       ├── pagination.py
+│       ├── text_processing.py
+│       └── time_utils.py
+├── build docker.cmd
+├── pipeline_busca
+│   └── src
+│       ├── pipeline
+│       │   ├── pipeline_stage.py
+│       │   └── search_pipeline.py
+│       ├── search
+│       │   └── search_service.py
+│       ├── search_app.py
+│       ├── stages
+│       │   ├── queryPreprocessStage.py
+│       │   ├── queryTokenizeStage.py
+│       │   ├── rankResultsStage.py
+│       │   └── searchIndexStage.py
+│       └── storage
+│           └── index_repository.py
+├── pipeline_indexador
+│   ├── app.py
+│   └── src
+│       ├── indexer
+│       │   └── indexer_service.py
+│       ├── pipeline
+│       │   ├── index_pipeline.py
+│       │   └── pipeline_stage.py
+│       ├── stages
+│       │   ├── index_build_stage.py
+│       │   ├── preprocess_stage.py
+│       │   └── tokenize_stage.py
+│       ├── storage
+│       │   └── index_repository.py
+│       └── tests
+│           └── pipeline_test.py
+├── requirements-dev.txt
+├── requirements.txt
+├── setup-dev.cmd
+├── start.cmd
+├── tests
+│   ├── __init__.py
+│   └── test_main.py
+├── tree.txt
+└── trre.txt

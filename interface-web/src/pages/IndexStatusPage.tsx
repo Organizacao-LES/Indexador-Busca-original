@@ -4,33 +4,43 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-
-const logs = [
-  { time: "14:32:01", message: "Iniciando indexação de 3 documentos...", type: "info" },
-  { time: "14:32:03", message: "resolucao_45_2025.pdf — Extraindo texto (UC12)...", type: "info" },
-  { time: "14:32:05", message: "resolucao_45_2025.pdf — Pré-processamento textual (UC15)...", type: "info" },
-  { time: "14:32:08", message: "resolucao_45_2025.pdf — Tokenização concluída (2.340 tokens)", type: "success" },
-  { time: "14:32:08", message: "resolucao_45_2025.pdf — Construção de índice invertido (UC16)", type: "success" },
-  { time: "14:32:09", message: "edital_monitoria.pdf — Extraindo texto...", type: "info" },
-  { time: "14:32:14", message: "edital_monitoria.pdf — Tokenização concluída (1.120 tokens)", type: "success" },
-  { time: "14:32:14", message: "edital_monitoria.pdf — Índice atualizado incrementalmente (UC17)", type: "success" },
-  { time: "14:32:15", message: "planilha_notas.csv — Formato incompatível com parser", type: "error" },
-  { time: "14:32:15", message: "planilha_notas.csv — Documento registrado como inválido (UC11)", type: "error" },
-  { time: "14:32:16", message: "Verificação de consistência documento-índice (UC18)...", type: "info" },
-  { time: "14:32:17", message: "Indexação finalizada: 2 sucesso, 1 falha · Tempo total: 16s (UC19)", type: "info" },
-];
+import { PageError, PageLoader } from "@/components/PageState";
+import { useIndexStatus } from "@/hooks/use-app-query";
+import { indexService } from "@/lib/api/services";
 
 const IndexStatusPage = () => {
+  const { data, isLoading, isError, refetch } = useIndexStatus();
   const { toast } = useToast();
   const [reindexing, setReindexing] = useState(false);
 
-  const handleReindex = () => {
+  const handleReindex = async () => {
     setReindexing(true);
-    setTimeout(() => {
+    try {
+      const result = await indexService.reindexAll();
+      await refetch();
+      toast({
+        title: "Reindexação concluída",
+        description: result.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao executar a reindexação.";
+      toast({
+        title: "Falha na reindexação",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
       setReindexing(false);
-      toast({ title: "Reindexação concluída", description: "Índice reconstruído com sucesso (UC13)." });
-    }, 3000);
+    }
   };
+
+  if (isLoading) {
+    return <PageLoader label="Carregando status da indexação..." />;
+  }
+
+  if (isError || !data) {
+    return <PageError title="Falha ao carregar o status da indexação." onRetry={() => refetch()} />;
+  }
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
@@ -52,7 +62,7 @@ const IndexStatusPage = () => {
               <Database className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">1.247</p>
+              <p className="text-2xl font-bold text-foreground">{data.indexedDocuments}</p>
               <p className="text-xs text-muted-foreground">Documentos indexados</p>
             </div>
           </div>
@@ -63,7 +73,7 @@ const IndexStatusPage = () => {
               <Clock className="h-5 w-5 text-info" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">2.4s</p>
+              <p className="text-2xl font-bold text-foreground">{data.averageTime}</p>
               <p className="text-xs text-muted-foreground">Tempo médio</p>
             </div>
           </div>
@@ -74,7 +84,7 @@ const IndexStatusPage = () => {
               <TrendingUp className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">96.2%</p>
+              <p className="text-2xl font-bold text-foreground">{data.successRate}</p>
               <p className="text-xs text-muted-foreground">Taxa de sucesso</p>
             </div>
           </div>
@@ -85,9 +95,36 @@ const IndexStatusPage = () => {
               <AlertTriangle className="h-5 w-5 text-destructive" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">3</p>
+              <p className="text-2xl font-bold text-foreground">{data.errors}</p>
               <p className="text-xs text-muted-foreground">Erros detectados</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground">Integridade do Índice</h3>
+          <Badge variant={data.integrityOk ? "default" : "destructive"}>
+            {data.integrityOk ? "Consistente" : `${data.inconsistencyCount} inconsistência(s)`}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.documentsWithoutActiveVersion}</p>
+            <p className="text-xs text-muted-foreground">Sem versão ativa</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.documentsWithoutIndex}</p>
+            <p className="text-xs text-muted-foreground">Sem índice</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.orphanIndexEntries}</p>
+            <p className="text-xs text-muted-foreground">Entradas órfãs</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.consistency.staleTerms}</p>
+            <p className="text-xs text-muted-foreground">Termos desatualizados</p>
           </div>
         </div>
       </div>
@@ -98,24 +135,53 @@ const IndexStatusPage = () => {
           <h3 className="text-sm font-semibold text-foreground">Indexação em andamento</h3>
           <Badge>Em processamento</Badge>
         </div>
-        <Progress value={73} className="h-2.5 mb-2" />
-        <p className="text-xs text-muted-foreground">73% concluído · Estimativa: 12 segundos restantes</p>
+        <Progress value={data.currentProgress} className="h-2.5 mb-2" />
+        <p className="text-xs text-muted-foreground">{data.currentProgress}% concluído · Estimativa: {data.remainingEstimate}</p>
       </div>
 
       {/* Status summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="glass-card p-4 text-center">
-          <p className="text-lg font-bold text-success">2</p>
+          <p className="text-lg font-bold text-success">{data.summary.completed}</p>
           <p className="text-xs text-muted-foreground">Concluídos</p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-lg font-bold text-info">0</p>
+          <p className="text-lg font-bold text-info">{data.summary.processing}</p>
           <p className="text-xs text-muted-foreground">Em processamento</p>
         </div>
         <div className="glass-card p-4 text-center">
-          <p className="text-lg font-bold text-destructive">1</p>
+          <p className="text-lg font-bold text-destructive">{data.summary.failed}</p>
           <p className="text-xs text-muted-foreground">Falhas</p>
         </div>
+      </div>
+
+      <div className="glass-card p-5 mb-6">
+        <h3 className="text-sm font-semibold text-foreground mb-4">Métricas Básicas do Índice</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.activeDocuments}</p>
+            <p className="text-xs text-muted-foreground">Docs ativos</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.activeVersions}</p>
+            <p className="text-xs text-muted-foreground">Versões ativas</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.totalTerms}</p>
+            <p className="text-xs text-muted-foreground">Termos</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.totalPostings}</p>
+            <p className="text-xs text-muted-foreground">Postings</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-foreground">{data.metrics.averageTermsPerDocument}</p>
+            <p className="text-xs text-muted-foreground">Termos/doc</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4">
+          Última indexação bem-sucedida: {data.metrics.lastIndexedAt ? new Date(data.metrics.lastIndexedAt).toLocaleString("pt-BR") : "indisponível"}
+        </p>
       </div>
 
       {/* Log */}
@@ -124,7 +190,7 @@ const IndexStatusPage = () => {
           <h3 className="text-sm font-semibold text-foreground">Log de Processamento em Tempo Real</h3>
         </div>
         <div className="divide-y divide-border max-h-96 overflow-y-auto">
-          {logs.map((log, i) => (
+          {data.logs.map((log, i) => (
             <div key={i} className="flex items-start gap-3 p-3 text-sm hover:bg-muted/30 transition-colors">
               <span className="text-xs text-muted-foreground font-mono whitespace-nowrap mt-0.5">{log.time}</span>
               {log.type === "success" && <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />}

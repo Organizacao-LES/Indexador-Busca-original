@@ -1,0 +1,2 @@
+-- O administrador inicial e criado pelo backend a partir de
+-- INITIAL_ADMIN_PASSWORD, evitando credenciais conhecidas no repositorio.

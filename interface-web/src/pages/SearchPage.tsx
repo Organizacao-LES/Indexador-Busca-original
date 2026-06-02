@@ -5,16 +5,44 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useRecentSearches } from "@/hooks/use-app-query";
 
 const SearchPage = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [category, setCategory] = useState("all");
+  const [documentType, setDocumentType] = useState("");
+  const [author, setAuthor] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState("relevancia");
+  const [limit, setLimit] = useState("20");
+  const { data: recentSearches = [] } = useRecentSearches();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      navigate(`/resultados?q=${encodeURIComponent(query)}`);
+      const params = new URLSearchParams({ q: query.trim(), limit });
+      if (category !== "all") {
+        params.set("category", category);
+      }
+      if (documentType.trim()) {
+        params.set("documentType", documentType.trim());
+      }
+      if (author.trim()) {
+        params.set("author", author.trim());
+      }
+      if (dateFrom) {
+        params.set("dateFrom", dateFrom);
+      }
+      if (dateTo) {
+        params.set("dateTo", dateTo);
+      }
+      if (sortBy !== "relevancia") {
+        params.set("sortBy", sortBy);
+      }
+      navigate(`/resultados?${params.toString()}`);
     }
   };
 
@@ -54,10 +82,10 @@ const SearchPage = () => {
         {showFilters && (
           <div className="glass-card p-5 space-y-4 animate-fade-in">
             <h3 className="text-sm font-semibold text-foreground">Filtros Avançados (UC23)</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Categoria</Label>
-                <Select>
+                <Select value={category} onValueChange={setCategory}>
                   <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
@@ -69,30 +97,36 @@ const SearchPage = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Tipo de Documento</Label>
-                <Select>
-                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="pdf">PDF</SelectItem>
-                    <SelectItem value="txt">TXT</SelectItem>
-                    <SelectItem value="csv">CSV</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Tipo ou Formato</Label>
+                <Input
+                  value={documentType}
+                  onChange={(event) => setDocumentType(event.target.value)}
+                  placeholder="Ex.: Resolução, Edital, PDF"
+                  className="text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Autor</Label>
+                <Input
+                  value={author}
+                  onChange={(event) => setAuthor(event.target.value)}
+                  placeholder="Ex.: Conselho Superior"
+                  className="text-xs"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Período — De</Label>
-                <Input type="date" className="text-xs" />
+                <Input type="date" className="text-xs" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Período — Até</Label>
-                <Input type="date" className="text-xs" />
+                <Input type="date" className="text-xs" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Ordenar por</Label>
-                <Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-40"><SelectValue placeholder="Relevância" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="relevancia">Relevância</SelectItem>
@@ -104,7 +138,7 @@ const SearchPage = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Máx. resultados (UC22)</Label>
-                <Select defaultValue="20">
+                <Select value={limit} onValueChange={setLimit}>
                   <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="10">10</SelectItem>
@@ -123,9 +157,9 @@ const SearchPage = () => {
       <div className="mt-10">
         <h3 className="text-sm font-medium text-muted-foreground mb-3">Buscas recentes</h3>
         <div className="flex flex-wrap gap-2">
-          {["resolução normativa", "edital 2025", "relatório gestão", "plano pedagógico"].map((term) => (
+          {recentSearches.map(({ id, term }) => (
             <button
-              key={term}
+              key={id}
               onClick={() => { setQuery(term); navigate(`/resultados?q=${encodeURIComponent(term)}`); }}
               className="px-3 py-1.5 rounded-full text-sm bg-secondary text-secondary-foreground hover:bg-accent transition-colors"
             >

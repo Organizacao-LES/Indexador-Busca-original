@@ -1,0 +1,90 @@
+name: Docker Frontend
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "interface-web/**"
+      - ".github/workflows/docker-frontend.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "interface-web/**"
+
+jobs:
+  build-and-smoke:
+    name: Build & Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Cache de camadas Docker ─────────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 3. Build da imagem ─────────────────────────────────────────────────
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./interface-web
+          file: ./interface-web/Dockerfile.windows
+          push: false
+          load: true
+          tags: ifesdoc-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 4. Sobe o container em background ──────────────────────────────────
+      - name: Run container
+        run: |
+          docker run -d \
+            --name frontend_ci \
+            -p 8080:8080 \
+            ifesdoc-frontend:ci
+
+      # ── 5. Aguarda o servidor estar pronto (max 60s) ────────────────────────
+      - name: Wait for server
+        run: |
+          echo "Aguardando container responder na porta 8080..."
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:8080 > /dev/null 2>&1; then
+              echo "✅ Servidor respondeu na tentativa $i"
+              exit 0
+            fi
+            echo "Tentativa $i/12 — aguardando 5s..."
+            sleep 5
+          done
+          echo "❌ Servidor não respondeu em 60s"
+          docker logs frontend_ci
+          exit 1
+
+      # ── 6. Smoke test ───────────────────────────────────────────────────────
+      - name: Smoke test HTTP 200
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8080)
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Esperado 200, recebido $STATUS"
+            docker logs frontend_ci
+            exit 1
+          fi
+          echo "✅ Frontend respondendo corretamente"
+
+      # ── 7. Logs em caso de falha ────────────────────────────────────────────
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs frontend_ci
+
+      # ── 8. Limpeza ──────────────────────────────────────────────────────────
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop frontend_ci  || true
+          docker rm   frontend_ci  || true
