@@ -1,545 +1,453 @@
 # Arquitetura do Backend Completo (`backend`)
 
-## Visão geral
+## Visao geral
 
-O backend do IFESDOC agora possui uma arquitetura híbrida entre:
+O backend do IFESDOC e uma API FastAPI organizada como monolito modular. Ele
+concentra autenticacao, usuarios, ingestao documental, versionamento, OCR,
+indexacao, busca, metricas, feedback, notificacoes, bot conversacional e
+integracao com PostgreSQL.
 
-- um núcleo principal em `backend/app`, já com API FastAPI, autenticação JWT, integração com PostgreSQL via SQLAlchemy e bootstrap de infraestrutura;
-- dois módulos de pipeline em `backend/pipeline_indexador` e `backend/pipeline_busca`, mantidos como implementações separadas de indexação e busca em memória.
+Este documento detalha apenas o backend. A visao completa do sistema, incluindo
+frontend, infraestrutura e prompt de diagrama, esta em:
 
-Em relação ao estado anterior, houve uma evolução concreta do backend principal:
+- `docs/arquitetura.md`
+- `docs/prompt_diagrama_arquitetura_ifesdoc.md`
 
-- autenticação real foi implementada;
-- o domínio `User` já está mapeado com SQLAlchemy;
-- a API `v1` já possui rotas de autenticação;
-- dependências de segurança e sessão foram adicionadas;
-- o schema relacional do sistema foi formalizado em SQL.
-
-Ao mesmo tempo, o backend ainda está em transição:
-
-- a parte de autenticação já está integrada;
-- os demais domínios continuam parcialmente apenas modelados na estrutura do banco ou previstos pela arquitetura do frontend;
-- os pipelines de busca/indexação ainda estão desacoplados da API principal.
-
-## Visão arquitetural macro
+## Visao macro
 
 ```text
-Frontend (interface-web)
-  -> /api/v1/auth/login
-  -> futuramente /api/v1/search, /documents, /users, /metrics, ...
+FastAPI /api/v1
+  -> schemas Pydantic
+  -> dependencies de auth/JWT/roles
+  -> services de aplicacao
+  -> repositories
+  -> modelos de dominio SQLAlchemy
+  -> PostgreSQL
+  -> storage/documents
 
-backend/app
-  -> FastAPI
-  -> core (config, database, dependencies, security)
-  -> api/v1 (auth)
-  -> services (auth)
-  -> repositories (user)
-  -> domain (user)
-  -> schemas (auth)
-
-docker/postgres/init
-  -> schema SQL relacional do sistema
-  -> seed do usuário administrador
-
-backend/pipeline_indexador
-  -> indexação em memória
-
-backend/pipeline_busca
-  -> busca em memória
+Fluxos internos relevantes:
+  DocumentService -> Adapters/OCR -> IndexService -> Pipeline -> Indice
+  SearchService -> QueryAnalyzer -> Strategies -> PostgreSQL/Indice/Embeddings
+  BotService -> Intent/Entities -> SearchService -> Formatter
+  Notification worker -> NotificationService -> PostgreSQL
 ```
 
-## Estrutura da pasta `backend/`
+## Estrutura principal
 
-- `backend/app/`: backend principal da aplicação.
-- `backend/pipeline_indexador/`: prova de conceito do pipeline de indexação.
-- `backend/pipeline_busca/`: prova de conceito do pipeline de busca.
-- `backend/tests/`: testes do backend principal.
-- `backend/Dockerfile`: container da API FastAPI.
+```text
+backend/
+  app/
+    api/v1/
+    adapters/
+    bot/
+    core/
+    domain/
+    exceptions/
+    pipeline/
+    repositories/
+    schemas/
+    services/
+    strategies/
+    tests/
+    utils/
+    workers/
+    main.py
+  pipeline_indexador/
+  pipeline_busca/
+  requirements.txt
+  Dockerfile
+```
 
-## 1. Backend principal: `backend/app/`
-
-Essa pasta representa a aplicação principal que o frontend deve consumir. A arquitetura vigente segue uma combinação de:
-
-- arquitetura em camadas;
-- Service Layer;
-- Repository Pattern;
-- autenticação baseada em JWT;
-- ORM com SQLAlchemy.
-
-## Estrutura e função de cada diretório/pacote
+## Camada de bootstrap e infraestrutura interna
 
 ### `backend/app/main.py`
 
-É o ponto de entrada efetivo da API.
-
 Responsabilidades:
 
-- cria a aplicação FastAPI;
-- define `lifespan` para tentativa de criação das tabelas do ORM;
-- registra `CORSMiddleware`;
-- inclui `api_router` em `/api/v1`;
-- padroniza respostas de erro para:
-  - exceções HTTP;
-  - validação de request;
-  - indisponibilidade do banco;
-  - schema de banco não inicializado;
-- expõe `GET /`.
-
-Função arquitetural:
-
-- bootstrap da aplicação web;
-- composição final das camadas internas;
-- adaptação do backend às condições de infraestrutura.
-
-Observação:
-
-- `main.py` já não é mais apenas um stub;
-- ele agora conecta configuração, banco, domínio e roteamento.
-
-### `backend/app/api/`
-
-Camada HTTP do sistema.
-
-#### `backend/app/api/v1/`
-
-Pacote de versionamento da API.
-
-##### `router.py`
-
-- agregador das rotas versionadas;
-- atualmente inclui `auth_router`.
-
-##### `auth_routes.py`
-
-- módulo HTTP de autenticação;
-- expõe:
-  - `POST /api/v1/auth/login`
-  - `GET /api/v1/auth/me`
-  - `POST /api/v1/auth/logout`
-
-Responsabilidades:
-
-- receber `LoginRequest`;
-- usar `AuthService` com `Session`;
-- resolver dependência de usuário autenticado via `get_current_user`;
-- serializar respostas por `TokenResponse` e `AuthenticatedUserResponse`.
-
-##### `__init__.py`
-
-- marcador de pacote.
-
-Estado arquitetural atual:
-
-- a API `v1` já existe funcionalmente, mas ainda focada em autenticação;
-- rotas de busca, documentos, ingestão, métricas e histórico ainda não foram movidas para esta camada.
+- cria a instancia FastAPI com titulo `IFESDOC API`;
+- registra o roteador versionado em `/api/v1`;
+- configura CORS por `BACKEND_CORS_ORIGINS`;
+- inicializa tabelas SQLAlchemy no `lifespan`;
+- garante complementos de schema para metadados, OCR e Full-Text Search;
+- cria administrador inicial quando `INITIAL_ADMIN_PASSWORD` esta configurada;
+- registra handlers globais de erro HTTP, validacao e banco indisponivel;
+- expoe `GET /` como health check.
 
 ### `backend/app/core/`
 
-Infraestrutura transversal do backend principal.
-
-#### `config.py`
-
-- carrega variáveis de ambiente a partir da raiz do projeto;
-- usa `BaseSettings` de `pydantic-settings`;
-- define:
-  - `DATABASE_URL`
-  - `SECRET_KEY`
-  - `ALGORITHM`
-  - `ACCESS_TOKEN_EXPIRE_MINUTES`
-  - `BACKEND_CORS_ORIGINS`
-
-Função arquitetural:
-
-- centralizar configuração e ambiente;
-- evitar parâmetros espalhados em múltiplos módulos.
-
-#### `database.py`
-
-- cria `engine` SQLAlchemy com `DATABASE_URL`;
-- cria `SessionLocal`;
-- define `Base = declarative_base()`;
-- expõe `get_db()` para injeção de sessão.
-
-Função arquitetural:
-
-- padronizar acesso ao banco;
-- sustentar ORM e dependências do FastAPI.
-
-#### `security.py`
-
-- encapsula hashing de senha com `passlib/bcrypt`;
-- verifica senha;
-- cria JWT com `python-jose`;
-- decodifica e valida token.
-
-Função arquitetural:
-
-- isolar mecanismos de segurança;
-- evitar lógica de token e hash dentro das rotas.
-
-#### `dependencies.py`
-
-- define a dependência `get_current_user`;
-- lê o Bearer token com `HTTPBearer`;
-- decodifica o JWT;
-- resolve `sub` para `user_id`;
-- consulta o usuário no banco;
-- valida existência e status ativo.
-
-Função arquitetural:
-
-- concentrar autenticação/autorização básica reutilizável pela API.
-
-#### `__init__.py`
-
-- marcador de pacote.
-
-### `backend/app/domain/`
-
-Pacote do modelo de domínio persistido.
-
-#### `user.py`
-
-Modelo SQLAlchemy da tabela `usuario`.
-
-Campos atualmente mapeados:
-
-- `cod_usuario`
-- `nome`
-- `login`
-- `email`
-- `senha_hash`
-- `perfil`
-- `ativo`
-
-Função arquitetural:
-
-- representar o usuário no backend principal;
-- servir de base para repositórios, serviços e dependências de autenticação.
-
-#### `__init__.py`
-
-- marcador de pacote.
-
-Estado atual:
-
-- o domínio já começou a ser implementado, mas ainda só para usuários;
-- os demais agregados do sistema continuam apenas no schema SQL ou previstos pela arquitetura.
-
-### `backend/app/repositories/`
-
-Camada de acesso a dados do backend principal.
-
-#### `user_repository.py`
-
-- encapsula consultas de usuário com SQLAlchemy;
-- expõe:
-  - `get_by_login`
-  - `get_by_email`
-  - `get_by_login_or_email`
-  - `get_by_id`
-
-Função arquitetural:
-
-- manter queries de usuário fora de `AuthService`;
-- reduzir acoplamento entre serviço e ORM.
-
-#### `postgresql_driver.py`
-
-- driver alternativo de acesso ao PostgreSQL via `psycopg2`;
-- fornece `conectar()` e `executar()`.
-
-Leitura arquitetural:
-
-- este arquivo representa uma camada de acesso de baixo nível paralela ao SQLAlchemy;
-- hoje ele não está integrado ao fluxo principal da API;
-- funciona mais como utilitário/manual ou resquício de uma abordagem anterior.
-
-#### `__init__.py`
-
-- marcador de pacote.
-
-### `backend/app/services/`
-
-Camada de caso de uso do backend principal.
-
-#### `auth_service.py`
-
-- implementa o fluxo de autenticação;
-- consulta usuário via `UserRepository`;
-- valida senha com `verify_password`;
-- recusa usuários inexistentes ou inativos;
-- cria JWT com `create_access_token`;
-- converte `perfil` técnico para papel funcional com `_map_role`.
-
-Retorno atual do login:
-
-- id
-- nome
-- login
-- email
-- role
-- active
-- token
-- access_token
-- token_type
-
-Função arquitetural:
-
-- encapsular a regra de autenticação;
-- manter `auth_routes.py` fina.
-
-#### `__init__.py`
-
-- marcador de pacote.
-
-Estado atual:
-
-- `auth_service.py` é a primeira service layer consolidada do backend principal.
-
-### `backend/app/schemas/`
-
-Camada de contratos externos da API.
-
-#### `auth_schema.py`
-
-Define os modelos Pydantic de autenticação:
-
-- `LoginRequest`
-- `TokenResponse`
-- `AuthenticatedUserResponse`
-
-Funções:
-
-- validar request de login;
-- impor a presença de `login` ou `email` com `model_validator`;
-- padronizar serialização da resposta.
-
-#### `__init__.py`
-
-- marcador de pacote.
-
-Estado atual:
-
-- os schemas reais já começaram pela autenticação;
-- os contratos dos demais domínios ainda não existem no backend principal.
-
-### `backend/app/utils/`
-
-Pacote auxiliar.
-
-Arquivos:
-
-- `pagination.py`: vazio.
-- `text_processing.py`: vazio.
-- `time_utils.py`: residual/minimal.
-- `__init__.py`: marcador de pacote.
-
-Leitura arquitetural:
-
-- o pacote existe como ponto de expansão, mas ainda não participa do fluxo principal.
-
-### `backend/app/strategies/`
-
-- pacote reservado para estratégias de ranking e busca;
-- hoje contém apenas `__init__.py`.
-
-### `backend/app/pipeline/`
-
-- pacote reservado para pipelines integrados ao backend principal;
-- hoje contém apenas `__init__.py`.
-
-### `backend/app/adapters/`
-
-- pacote reservado para integrações de parsing e armazenamento;
-- hoje contém apenas `__init__.py`.
-
-### `backend/app/exceptions/`
-
-- pacote reservado para exceções específicas do domínio/aplicação;
-- hoje contém apenas `__init__.py`.
-
-## 2. Modelagem relacional e bootstrap do banco
-
-Embora esteja fora de `backend/app`, a pasta `docker/postgres/init/` agora é parte central da arquitetura backend porque define o modelo relacional real do sistema.
-
-### `docker/postgres/init/01_schema.sql`
-
-Script de criação do schema principal do IFESDOC.
-
-Tabelas modeladas:
-
-- `usuario`
-- `categoria_documento`
-- `status_ingestao`
-- `tipo_campo`
-- `calculo_metricas`
-- `documento`
-- `documentos_invalidos`
-- `historico_busca`
-- `historico_administrativo`
-- `historico_documento`
-- `historico_ingestao`
-- `termo`
-- `campo_documento`
-- `historico_indexacao`
-- `indice_invertido`
-- `feedback_relevancia`
-
-Papel arquitetural:
-
-- formaliza o domínio de usuários, documentos, ingestão, histórico, indexação, métricas e relevância;
-- mostra a arquitetura de persistência alvo do sistema;
-- revela que o backend foi modelado para ir além da autenticação, mesmo que o código Python ainda não tenha todas essas entidades implementadas.
-
-### `docker/postgres/init/02_admin.sql`
-
-- insere um usuário administrador padrão;
-- usa `ON CONFLICT (login) DO NOTHING`.
-
-Papel arquitetural:
-
-- disponibiliza bootstrap mínimo do sistema autenticável;
-- permite que a API de login funcione sem cadastro manual inicial.
-
-## 3. Infraestrutura de execução do backend principal
-
-### `backend/Dockerfile`
-
-Container de execução da API.
-
 Responsabilidades:
 
-- usa `python:3.10-slim`;
-- instala dependências de compilação e `libpq-dev`;
-- instala `requirements.txt`;
-- copia `backend/` para `/app`;
-- expõe porta `8000`;
-- sobe `uvicorn app.main:app`.
+- `config.py`: configuracoes por ambiente com `pydantic-settings`;
+- `database.py`: engine, `SessionLocal`, `Base` e dependencia `get_db`;
+- `security.py`: hash de senha, verificacao, JWT e sessoes;
+- `dependencies.py`: `get_current_user` e `require_roles`;
+- `schema.py`: ajustes incrementais de schema para FTS, OCR e metadados;
+- `logging.py`: logger compartilhado.
 
-Função arquitetural:
+## Camada HTTP
 
-- empacotar a API principal em ambiente reprodutível;
-- padronizar execução local/containerizada.
+Local: `backend/app/api/v1/`.
 
-## 4. Pipelines independentes
+As rotas sao versionadas e agregadas por `router.py`.
 
-Os módulos abaixo continuam existindo e fazem parte da arquitetura do repositório, mas não estão integrados ao backend principal autenticado.
+| Prefixo | Responsabilidade |
+| --- | --- |
+| `/auth` | Login, usuario autenticado e logout |
+| `/users` | CRUD administrativo de usuarios |
+| `/ingestion` | Upload individual, lote e historico de ingestao |
+| `/documents` | Detalhes, versoes, download, exportacao, exclusao e reindexacao |
+| `/search` | Busca, analise de query, comparacao de estrategias e historico |
+| `/index` | Status do indice e reindexacao geral |
+| `/ocr` | OCR manual, status e reprocessamento |
+| `/metrics` | Indicadores, relatorios e exportacoes |
+| `/notifications` | Listagem, leitura e contagem de notificacoes |
+| `/feedback` | Feedback de relevancia dos resultados |
+| `/bot` | Teste local e webhooks Telegram/WhatsApp |
+| `/history` | Historico administrativo |
+| `/settings` | Configuracoes da aplicacao |
 
-### `backend/pipeline_indexador/`
+As rotas devem permanecer finas: recebem dados, aplicam dependencias e chamam
+services. A regra de negocio fica na camada `services/`.
 
-Pipeline de indexação em memória.
+## Schemas e contratos
 
-Função:
+Local: `backend/app/schemas/`.
 
-- pré-processar texto;
-- tokenizar;
-- construir índice invertido em memória.
+Os schemas Pydantic definem request/response da API e mantem o contrato separado
+das entidades SQLAlchemy. Existem schemas para:
 
-Estrutura:
+- autenticacao;
+- usuarios;
+- documentos;
+- busca e analise de query;
+- indexacao;
+- OCR;
+- metricas;
+- notificacoes;
+- feedback;
+- historico;
+- bot;
+- configuracoes.
 
-- `app.py`: execução manual;
-- `src/indexer/indexer_service.py`: fachada do indexador;
-- `src/pipeline/`: infraestrutura do pipeline;
-- `src/stages/`: etapas `PreprocessStage`, `TokenizeStage`, `IndexBuildStage`;
-- `src/storage/index_repository.py`: repositório do índice invertido em memória;
-- `src/tests/pipeline_test.py`: reservado, ainda vazio.
+## Camada de aplicacao
 
-### `backend/pipeline_busca/`
+Local: `backend/app/services/`.
 
-Pipeline de busca em memória.
+### Services principais
 
-Função:
+- `AuthService`: login, validacao de senha, emissao de token e resposta de
+  sessao.
+- `UserService`: regras administrativas de usuarios.
+- `DocumentService`: upload, validacao, storage, versionamento, metadados,
+  download, exportacao, exclusao logica/fisica e integracao com indexacao.
+- `IndexService`: indexacao e reindexacao de documentos.
+- `InvertedIndexService`: persistencia de campos, termos, postings e estatisticas
+  do indice invertido.
+- `SearchService`: query analyzer, filtros, escolha de estrategia, ranking,
+  snippets, paginacao e historico.
+- `QueryAnalyzer`: normalizacao, tokenizacao, termos relevantes, filtros
+  implicitos, frases, operadores simples e termos excluidos.
+- `SemanticSearchService`: embeddings, busca semantica e reconstrucao vetorial.
+- `OCRService`: OCR automatico/manual, registro de status e reindexacao apos OCR.
+- `MetricsService`: metricas de acesso, busca, relatorios e calculos.
+- `NotificationService`: notificacoes de usuario e alertas administrativos.
+- `BotService`: fluxo conversacional, busca via mensagem e resposta formatada.
+- `FeedbackService`: feedback de relevancia.
+- `SettingsService`: configuracoes consumidas pelo frontend.
+- `AdministrativeHistoryService`: auditoria administrativa.
 
-- normalizar query;
-- tokenizar consulta;
-- consultar índice invertido;
-- ranquear resultados por frequência.
+## Dominio
 
-Estrutura:
+Local: `backend/app/domain/`.
 
-- `src/search_app.py`: execução manual;
-- `src/search/search_service.py`: fachada da busca;
-- `src/pipeline/`: infraestrutura do pipeline;
-- `src/stages/`: etapas de preprocessamento, tokenização, consulta e ranking;
-- `src/storage/index_repository.py`: índice invertido em memória para consulta.
+O dominio e mapeado com SQLAlchemy. As entidades representam o modelo relacional
+do IFESDOC:
 
-Leitura arquitetural:
+- usuarios e sessoes: `User`, `UserRole`, `UserSession`;
+- documentos: `Document`, `DocumentMetadata`, `DocumentHistory`,
+  `DocumentCategory`, `InvalidDocument`;
+- ingestao e indexacao: `IngestionHistory`, `IngestionStatus`, `IndexHistory`;
+- indice: `FieldType`, `DocumentField`, `Term`, `InvertedIndex`;
+- busca: `SearchHistory`, `RelevanceFeedback`, `DocumentEmbedding`;
+- OCR: `OCRHistory`;
+- operacao: `MetricCalculation`, `Notification`, `AdministrativeHistory`;
+- bot: `BotConversation`, `BotInteraction`, `BotUserLink`.
 
-- esses dois módulos continuam relevantes como protótipos funcionais da lógica de recuperação da informação;
-- porém ainda estão fora do fluxo da API FastAPI e do schema PostgreSQL principal.
+## Repositories
 
-## 5. Testes
+Local: `backend/app/repositories/`.
 
-### `backend/tests/`
+Os repositories encapsulam acesso ao banco e evitam SQL espalhado nos services.
 
-- `test_main.py`: teste de sanidade do endpoint raiz.
-- `__init__.py`: marcador de pacote.
+Repositories relevantes:
 
-Observação importante:
+- `UserRepository`;
+- `SessionRepository`;
+- `DocumentRepository`;
+- `SearchRepository`;
+- `PostgresSearchRepository`;
+- `EmbeddingRepository`;
+- `NotificationRepository`;
+- `BotRepository`;
+- `AdministrativeHistoryRepository`.
 
-- o teste atual ainda espera a mensagem antiga `{"message": "IFESDOC API running"}`;
-- o `main.py` agora retorna `{"message": "IFESDOC rodando 🚀"}`;
-- isso indica que a camada de testes já ficou defasada em relação à implementação atual.
+`PostgresSearchRepository` concentra a busca textual nativa com PostgreSQL,
+incluindo `websearch_to_tsquery`, `ts_rank_cd`, `ts_headline` e filtros.
 
-## 6. Relação entre as camadas do backend principal
+## Adapters
 
-### Fluxo atual de autenticação
+Local: `backend/app/adapters/`.
+
+Os adapters isolam bibliotecas externas e formatos de entrada.
+
+| Adapter | Papel |
+| --- | --- |
+| `DocumentAdapter` | Interface base dos parsers |
+| `DocumentAdapterRegistry` | Seleciona adapter por extensao |
+| `PdfDocumentAdapter` | Extrai texto de PDF com `pdfplumber` |
+| `DocxDocumentAdapter` | Extrai texto de DOCX com `python-docx` |
+| `TxtDocumentAdapter` | Extrai texto de TXT |
+| `CsvDocumentAdapter` | Extrai texto de CSV |
+| `OCRAdapter` | OCR em PDF com Tesseract, `pdf2image` e Pillow |
+| `EmbeddingAdapter` | Interface de embedding |
+| `MockEmbeddingAdapter` | Embedding deterministico/local para busca semantica |
+
+## Pipeline de indexacao
+
+Local: `backend/app/pipeline/`.
+
+O pipeline integrado ao backend e usado por `IndexService`.
+
+```text
+DocumentIngestionPipeline
+  -> TextPreprocessStage
+  -> TextTokenizeStage
+  -> RelationalIndexPersistStage
+  -> SemanticEmbeddingPersistStage
+```
+
+Responsabilidades das etapas:
+
+- `TextPreprocessStage`: normaliza texto, remove ruido e prepara dados por
+  campo;
+- `TextTokenizeStage`: valida tokens e monta payload de indexacao;
+- `RelationalIndexPersistStage`: grava `tipo_campo`, `campo_documento`,
+  `termo` e `indice_invertido`;
+- `SemanticEmbeddingPersistStage`: gera e persiste embedding da versao ativa.
+
+Os modulos `backend/pipeline_indexador/` e `backend/pipeline_busca/` continuam no
+repositorio como pipelines separados e didaticos para indexacao e busca em
+memoria.
+
+## Strategies de busca
+
+Local: `backend/app/strategies/`.
+
+`SearchService` seleciona a estrategia pelo parametro `mode` da busca.
+
+| Modo | Classe | Papel |
+| --- | --- | --- |
+| `frequency` | `FrequencyRankingStrategy` | Frequencia simples de termos |
+| `tfidf` | `TFIDFRankingStrategy` | Frequencia ponderada por raridade |
+| `bm25` | `BM25RankingStrategy` | Ranking estatistico para textos |
+| `postgres_fts` | `PostgresFTSSearchStrategy` | Busca nativa PostgreSQL FTS |
+| `semantic` | `SemanticRankingStrategy` | Similaridade vetorial |
+| `hybrid` | `HybridRankingStrategy` | Combina textual e semantico |
+| `hybrid_postgres` | `HybridPostgresSearchStrategy` | Combina FTS e ranking secundario |
+
+## Padroes de projeto usados
+
+### Strategy Pattern
+
+Usado na busca. O `SearchService` nao implementa todos os calculos de ranking em
+linha; ele delega para strategies especializadas. Isso permite comparar e trocar
+algoritmos sem alterar o contrato da API.
+
+Arquivos principais:
+
+- `backend/app/services/search_service.py`;
+- `backend/app/strategies/`.
+
+### Pipeline Pattern
+
+Usado na indexacao. O `IndexService` envia um contexto por etapas ordenadas,
+onde cada stage faz uma transformacao clara ate o documento ficar pesquisavel.
+
+Arquivos principais:
+
+- `backend/app/services/index_service.py`;
+- `backend/app/pipeline/document_ingestion_pipeline.py`;
+- `backend/app/pipeline/stages.py`.
+
+### Padroes de apoio
+
+- Repository Pattern em `repositories/`;
+- Adapter Pattern em `adapters/` e `bot/`;
+- Service Layer em `services/`;
+- DTO/Schema em `schemas/`.
+
+## Persistencia e PostgreSQL
+
+O PostgreSQL e responsavel por:
+
+- dados cadastrais;
+- documentos e versoes;
+- historicos de ingestao, documento, indexacao, busca, OCR e administracao;
+- indice invertido relacional;
+- feedback de relevancia;
+- notificacoes;
+- metricas;
+- conversas do bot;
+- embeddings.
+
+O sistema tambem usa PostgreSQL Full-Text Search:
+
+- coluna `historico_documento.search_vector`;
+- trigger para manter o vetor atualizado;
+- indice GIN;
+- ranking com `ts_rank_cd`;
+- highlight com `ts_headline`.
+
+Scripts principais:
+
+- `docker/postgres/init/01_schema.sql`;
+- `docker/postgres/init/02_admin.sql`;
+- `docker/postgres/init/03_full_text_search.sql`;
+- `docker/postgres/init/04_ocr_support.sql`.
+
+## Fluxos principais
+
+### Autenticacao
 
 ```text
 POST /api/v1/auth/login
-  -> auth_routes.login()
-    -> AuthService.login()
-      -> UserRepository.get_by_login_or_email()
-      -> verify_password()
-      -> create_access_token()
-    -> TokenResponse
+  -> AuthService
+  -> UserRepository
+  -> verify_password
+  -> create_access_token
+  -> UserSession
+  -> TokenResponse
 ```
 
-### Fluxo atual de usuário autenticado
+### Ingestao
 
 ```text
-GET /api/v1/auth/me
-  -> Depends(get_current_user)
-    -> HTTPBearer
-    -> decode_token()
-    -> UserRepository/ORM query em User
-  -> auth_routes.me()
+POST /api/v1/ingestion/upload
+  -> DocumentService
+  -> DocumentAdapterRegistry
+  -> parser por extensao
+  -> OCRService se texto insuficiente
+  -> storage/documents
+  -> metadados e versao no PostgreSQL
+  -> IndexService
+  -> DocumentIngestionPipeline
+  -> indice invertido e embedding
 ```
 
-## 7. Estado atual da arquitetura backend
+### Busca
 
-### O que já está consolidado
+```text
+GET /api/v1/search
+  -> get_current_user
+  -> SearchService
+  -> QueryAnalyzer
+  -> Strategy por mode
+  -> SearchRepository/PostgresSearchRepository/EmbeddingRepository
+  -> resposta paginada com score, snippet e metadados
+  -> SearchHistory
+```
 
-- FastAPI com `lifespan`, CORS e handlers globais de erro;
-- configuração centralizada com `pydantic-settings`;
-- conexão PostgreSQL via SQLAlchemy;
-- modelo ORM de usuário;
-- autenticação JWT com hash bcrypt;
-- rotas `/api/v1/auth/login` e `/api/v1/auth/me`;
-- schema SQL completo do banco;
-- seed de administrador;
-- `Dockerfile` da API.
+### OCR
 
-### O que está parcialmente consolidado
+```text
+POST /api/v1/ocr/document/{document_id}
+  -> OCRService
+  -> OCRAdapter
+  -> Tesseract
+  -> atualiza historico_documento
+  -> registra historico_ocr
+  -> reindexa documento quando aplicavel
+```
 
-- repositórios e services reais existem apenas para autenticação;
-- o domínio completo já está modelado no banco, mas não no Python;
-- há coexistência de SQLAlchemy e um driver `psycopg2` solto;
-- pipelines de indexação e busca ainda não foram absorvidos pela API principal.
+### Bot
 
-### O que ainda está em aberto
+```text
+Webhook Telegram/WhatsApp
+  -> adapter do canal
+  -> BotService
+  -> IntentDetector / EntityExtractor
+  -> QueryAnalyzer / SearchService
+  -> MessageFormatter
+  -> resposta ao canal
+```
 
-- rotas REST dos demais domínios consumidos pelo frontend;
-- integração do JWT do login com os outros endpoints;
-- implementação de documentos, busca, métricas, ingestão, histórico e configurações na camada `app`;
-- convergência entre schema relacional, ORM e pipelines especializados.
+## Worker de notificacoes
 
-## Diagnóstico final
+Local: `backend/app/workers/notification_worker.py`.
 
-O backend já não é mais apenas um esqueleto. A arquitetura principal entrou em fase operacional com autenticação real, banco configurado, seed inicial e modelo ORM funcional. Ainda assim, o sistema segue dividido em duas frentes:
+O worker roda em container separado no Docker Compose e periodicamente:
 
-- `backend/app`: aplicação real em consolidação, hoje centrada em autenticação;
-- `pipeline_indexador` e `pipeline_busca`: motores experimentais que preservam a lógica de indexação e recuperação, porém fora da API principal.
+- procura documentos invalidos recentes;
+- procura falhas recentes de indexacao;
+- cria notificacoes para administradores;
+- envia notificacao de disponibilidade do worker com chave de deduplicacao.
 
-Isso torna os documentos de arquitetura importantes para versionamento porque o repositório passou a ter uma transição clara entre arquitetura planejada e arquitetura efetivamente em uso.
+## Testes
+
+Locais:
+
+- `backend/app/tests/`;
+- `backend/tests/`;
+- `backend/pipeline_indexador/src/tests/`.
+
+Coberturas relevantes:
+
+- autenticacao e seguranca;
+- usuarios;
+- busca e estrategias;
+- indexacao e indice invertido;
+- ingestao;
+- documentos e versionamento;
+- OCR;
+- notificacoes;
+- bot;
+- metricas.
+
+## Infraestrutura backend
+
+Arquivos principais:
+
+- `backend/requirements.txt`: dependencias efetivas do backend;
+- `backend/Dockerfile`: imagem da API;
+- `docker/docker-compose.yml`: API, PostgreSQL, worker, frontend e SonarQube;
+- `.env.example`: variaveis de ambiente esperadas.
+
+Configuracoes importantes:
+
+- `DATABASE_URL`;
+- `SECRET_KEY`;
+- `INITIAL_ADMIN_PASSWORD`;
+- `BACKEND_CORS_ORIGINS`;
+- `DOCUMENT_UPLOAD_DIR`;
+- `DOCUMENT_ALLOWED_EXTENSIONS`;
+- variaveis de OCR;
+- variaveis de bot Telegram/WhatsApp;
+- `NOTIFICATION_WORKER_INTERVAL_SECONDS`.
+
+## Diagnostico arquitetural
+
+O backend atual ja possui mais do que autenticacao: ele concentra o ciclo
+principal de documentos, busca, indexacao, OCR, metricas, notificacoes e bot.
+A arquitetura segue coerente com separacao em camadas e usa os dois padroes mais
+importantes para sua evolucao:
+
+- Strategy, para trocar e comparar rankings de busca;
+- Pipeline, para organizar a indexacao documental por etapas.
+
+Os principais pontos de evolucao natural sao:
+
+- mover processamentos pesados para filas dedicadas quando necessario;
+- ampliar embeddings reais em substituicao ao adapter mockado;
+- consolidar migracoes com Alembic;
+- ampliar observabilidade operacional;
+- aumentar cobertura de testes de ponta a ponta.

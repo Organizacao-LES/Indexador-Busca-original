@@ -1,93 +1,115 @@
-# 🧠 Visão Geral da Solução: Indexador e Buscador
+# Stack Tecnologica do IFESDOC
 
-O sistema foi concebido como uma aplicação moderna e desacoplada, focada em ser uma solução robusta de busca sem a complexidade desnecessária de microserviços prematuros.
+Este documento resume as tecnologias usadas no IFESDOC e o papel de cada uma na
+arquitetura. Para a visao em camadas e o diagrama completo, consulte
+`docs/arquitetura.md`.
 
-**Pilares Estratégicos:**
+## Visao geral
 
-* **API-first:** Foco na interface programática para múltiplos clientes.
-* **Containerizada:** Isolamento completo do ambiente com Docker.
-* **Modular & Extensível:** Facilidade para adicionar novos tipos de busca ou parsers.
+O IFESDOC usa uma arquitetura web API-first, com frontend React, backend FastAPI,
+PostgreSQL como banco principal e Docker Compose para ambiente local/container.
+A busca combina indice invertido relacional, PostgreSQL Full-Text Search,
+estrategias de ranking e uma camada preparada para busca semantica.
 
----
+## Frontend
 
-## 🏗 1. Stack Tecnológica
+| Tecnologia | Papel |
+| --- | --- |
+| React 18 | SPA da interface web |
+| TypeScript | Tipagem dos contratos e componentes |
+| Vite | Dev server e build do frontend |
+| React Router | Rotas publicas e protegidas |
+| TanStack React Query | Cache, sincronizacao e ciclo de vida de consultas |
+| Tailwind CSS | Estilizacao utilitaria |
+| shadcn/ui + Radix UI | Componentes acessiveis e reutilizaveis |
+| lucide-react | Icones da interface |
+| Recharts | Graficos e visualizacoes |
+| Vitest + Testing Library | Testes frontend |
 
-| Componente | Tecnologia | Motivação Principal |
-| --- | --- | --- |
-| **Linguagem** | Python 3.10 / 3.11 | Compatível com o runtime do container e o ecossistema do backend. |
-| **Backend** | FastAPI 0.111.0 | Performance, validação via Pydantic e documentação automática. |
-| **Banco de Dados** | PostgreSQL | Confiabilidade e suporte a consultas relacionais e de texto. |
-| **ORM** | SQLAlchemy 2.0.49 | Mapeamento moderno e integração com sessions. |
-| **Migrações** | Alembic | Versionamento de banco e reprodutibilidade (presente nas dependências). |
-| **Validação** | Pydantic 2.7.1 | Modelos de dados e validação de request/response. |
-| **Segurança** | JWT / python-jose 3.5.0 | Autenticação stateless e geração de tokens. |
-| **Testes** | Pytest 8.2.1 | Simplicidade e cobertura para o backend. |
-| **Extração** | pdfplumber, python-docx | Parsers para documentos PDF e DOCX. |
+## Backend
 
----
+| Tecnologia | Papel |
+| --- | --- |
+| Python | Linguagem principal do backend e pipelines |
+| FastAPI | API REST versionada em `/api/v1` |
+| Uvicorn | Servidor ASGI |
+| Pydantic | Schemas de request/response e validacao |
+| pydantic-settings | Configuracoes via ambiente |
+| SQLAlchemy | ORM e mapeamento das entidades |
+| psycopg2 | Driver PostgreSQL |
+| Alembic | Base para versionamento de banco |
+| python-jose | Criacao e validacao de JWT |
+| passlib + bcrypt | Hash e verificacao de senhas |
+| Pytest | Testes unitarios e de integracao |
 
-## 🔍 2. O Motor de Busca (PostgreSQL)
+## Documentos, OCR e busca
 
-Em vez de implementar um motor de busca do zero ou subir um Elasticsearch pesado, utilizamos as funcionalidades nativas do PostgreSQL. Isso resolve:
+| Tecnologia | Papel |
+| --- | --- |
+| PostgreSQL 16 | Banco relacional, historicos e busca textual |
+| PostgreSQL GIN + tsvector | Full-Text Search persistente |
+| `ts_rank_cd` / `ts_headline` | Ranking e highlights nativos do PostgreSQL |
+| Indice invertido relacional | Estrutura propria com termos, campos e postings |
+| pdfplumber | Extracao textual de PDFs |
+| python-docx | Extracao textual de DOCX |
+| unidecode | Normalizacao textual sem acentos |
+| Tesseract OCR | OCR para PDF escaneado |
+| pytesseract | Integracao Python com Tesseract |
+| pdf2image | Conversao de PDF em imagens para OCR |
+| Pillow | Manipulacao de imagens no fluxo OCR |
 
-* **Índice Invertido (GIN).**
-* **Ranking BM25:** Cálculo de relevância estatística.
-* **Normalização:** Remoção de acentos e stop words.
-* **Highlighting:** Uso de `ts_headline` para destacar termos na busca.
+## Padroes e estrutura
 
-> **Nota Técnica:** O ranking segue a lógica de relevância de busca textual, onde o score é calculado para priorizar os documentos mais pertinentes.
+| Padrao / abordagem | Onde aparece |
+| --- | --- |
+| Monolito modular | API FastAPI unica com camadas internas bem separadas |
+| Clean Architecture / DDD simplificado | Separacao entre API, services, domain, repositories e infraestrutura |
+| Service Layer | `backend/app/services/` |
+| Repository Pattern | `backend/app/repositories/` |
+| Strategy Pattern | `backend/app/strategies/`, usado no `SearchService` |
+| Pipeline Pattern | `backend/app/pipeline/`, usado no `IndexService` |
+| Adapter Pattern | `backend/app/adapters/`, parsers, OCR, bot e embeddings |
+| DTO/Schema | `backend/app/schemas/` com Pydantic |
 
-$$Score(D, Q) = \sum_{q_i \in Q} \text{IDF}(q_i) \cdot \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot (1 - b + b \cdot \frac{|D|}{\text{avgdl}})}$$
+## Infraestrutura
 
----
+| Tecnologia | Papel |
+| --- | --- |
+| Docker | Empacotamento do backend e frontend |
+| Docker Compose | Orquestracao local de frontend, backend, PostgreSQL, worker e SonarQube |
+| PostgreSQL container | Banco principal do IFESDOC |
+| Notification worker | Worker Python para alertas e falhas recentes |
+| SonarQube Community | Analise estatica e qualidade |
+| Volumes Docker | Persistencia de banco, documentos e dados do SonarQube |
 
-## 🧱 3. Arquitetura do Sistema
+## Variaveis e configuracao
 
-A solução adota uma separação de camadas rígida para garantir testabilidade e manutenção simplificada.
+Backend:
 
-**Fluxo de Dados:**
-`API ➔ Services ➔ Strategy ➔ Repository ➔ Database`
-`                  ➔ Adapters`
+- `DATABASE_URL`: conexao SQLAlchemy com PostgreSQL.
+- `SECRET_KEY`: chave JWT, obrigatoriamente forte.
+- `INITIAL_ADMIN_PASSWORD`: senha inicial segura do administrador.
+- `BACKEND_CORS_ORIGINS`: origens permitidas do frontend.
+- `DOCUMENT_UPLOAD_DIR`: diretorio dos arquivos enviados.
+- `DOCUMENT_ALLOWED_EXTENSIONS`: extensoes aceitas.
+- `OCR_ENABLED`, `OCR_LANGUAGE`, `OCR_DPI`, `OCR_MAX_PAGES`,
+  `OCR_MIN_TEXT_LENGTH`, `OCR_TIMEOUT_SECONDS`: configuracao de OCR.
+- `TELEGRAM_BOT_TOKEN`, `WHATSAPP_ACCESS_TOKEN` e variaveis relacionadas:
+  integracoes opcionais de bot.
 
-### Padrões de Projeto (Design Patterns):
+Frontend:
 
-#### 🥇 Strategy Pattern (Comportamental)
+- `VITE_APP_NAME`: nome exibido na interface.
+- `VITE_API_URL`: URL da API FastAPI.
+- `VITE_USE_MOCK_API`: alterna entre API real e dados mockados.
 
-**Motivação:** Gerenciar diferentes tipos de busca (simples, com filtros, avançada) sem poluir o código principal com condicionais complexas. Permite evoluir o ranking de forma isolada.
+## Observacao sobre versoes
 
-#### 🥈 Adapter Pattern (Estrutural)
+As versoes efetivas devem ser conferidas nos arquivos de dependencias do modulo
+correspondente:
 
-**Motivação:** Blindar o núcleo do sistema contra mudanças em bibliotecas externas (como pdfplumber). Se precisarmos trocar o parser de PDF amanhã, mudamos apenas o Adapter.
+- backend: `backend/requirements.txt`;
+- frontend: `interface-web/package.json` e `package-lock.json`.
 
----
-
-## 🐳 4. Infraestrutura e Qualidade
-
-* **Container-First:** Toda a aplicação roda via Docker Compose, garantindo que o ambiente do desenvolvedor seja idêntico ao de produção/avaliação.
-* **Análise Estática:** Uso do SonarQube para monitorar code smells, complexidade ciclomática e garantir que a cobertura de testes via Pytest permaneça alta.
-
----
-
-## 📋 5. Gerenciamento e Metodologia
-
-Adotamos uma abordagem híbrida para equilibrar controle e agilidade:
-
-### Gestão de Código
-
-* **Gitflow Adaptado:** Branches `main` (estável), `develop` (integração) e `feature/*` (funcionalidades).
-* **Code Review:** Pull Requests obrigatórios para manter a qualidade.
-
-### Gestão de Tarefas
-
-* **Híbrido Scrum/Kanban:**
-* **Sprints:** Entregas incrementais com planejamento definido.
-* **Kanban Board:** Visualização contínua do fluxo de trabalho no GitHub Projects.
-
-
-
----
-
-## 🎯 6. Justificativa Estratégica
-
-A escolha desta stack evita o famigerado Overengineering. Em vez de microserviços complexos ou dependências pesadas, focamos em uma solução monolítica modular, que é fácil de manter, rápida de implantar e perfeitamente adequada para exigências acadêmicas e profissionais.
-
+O arquivo `requirements.txt` na raiz pode representar uma base historica; para o
+backend em execucao, prefira `backend/requirements.txt`.

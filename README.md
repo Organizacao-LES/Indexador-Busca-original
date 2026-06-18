@@ -194,6 +194,7 @@ O sistema foi desenhado para permitir expansoes sem ruptura do nucleo:
 Os principais documentos do projeto estao em `docs/`:
 
 - `docs/arquitetura.md`
+- `docs/prompt_diagrama_arquitetura_ifesdoc.md`
 - `docs/stack_tecnologica.md`
 - `docs/modelo_dados.md`
 - `docs/api_spec.md`
