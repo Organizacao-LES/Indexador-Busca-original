@@ -11,7 +11,7 @@ python-dotenv==1.2.3
 # 🔹 DATABASE
 ###########################################################
 
-sqlalchemy==2.1.0
+sqlalchemy==2.1.1
 psycopg2-binary==2.9.13
 alembic==1.20.0
 
